@@ -4,8 +4,14 @@ This plugin allows you to send JSON data bulked to HTTP endpoints (```httpbulk(i
 
 ```
 queues:
- - id: http
-   path: /storage/log/http.jlog
+ - id: elastic
+   path: /var/run/elastic.jlog
+   format: ndjson
+   url: http://54.152.103.33:9200/_bulk
+   maxitems: 500
+   tls_verify: false
+ - id: custom-ndjson
+   path: /var/run/custom-ndjson.jlog
    format: "ndjson"
    url: "http://1.2.3.4:8080/ndjson"
    max_items: 1000
