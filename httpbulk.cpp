@@ -127,50 +127,58 @@ void httpbulk(HalonHSLContext* hhc, HalonHSLArguments* args, HalonHSLValue* ret)
 	if (x == bulkQueues.end())
 		return;
 
+	bool r = false;
 	std::unique_lock<std::mutex> lck(x->second->writerMutex);
 	if (jlog_ctx_write(x->second->writerContext, payload, payloadlen) != 0)
+	{
 		syslog(LOG_CRIT, "httpbulk: jlog_ctx_write failed: %d %s", jlog_ctx_err(x->second->writerContext), jlog_ctx_err_string(x->second->writerContext));
+	}
+	else
+	{
+		r = true;
+		x->second->writeNotify = true;
+		x->second->writeCV.notify_one();
+	}
 
-	x->second->writeNotify = true;
-	x->second->writeCV.notify_one();
+	HalonMTA_hsl_value_set(ret, HALONMTA_HSL_TYPE_BOOLEAN, &r, 0);
 	return;
 }
 
-void subscriber(std::shared_ptr<bulkQueue> log)
+void subscriber(std::shared_ptr<bulkQueue> queue)
 {
 	size_t failures = 0;
 	auto lastSend = std::chrono::steady_clock::now();
 
 	struct curl_slist* hdrs = nullptr;
-	if (log->ndjson)
+	if (queue->ndjson)
 		hdrs = curl_slist_append(hdrs, "Content-Type: application/x-ndjson");
 	else
 		hdrs = curl_slist_append(hdrs, "Content-Type: application/json");
-	for (const auto & i : log->headers)
+	for (const auto & i : queue->headers)
 		hdrs = curl_slist_append(hdrs, i.c_str());
 
-	while (!log->quit)
+	while (!queue->quit)
 	{
 		jlog_id begin, end;
-		int count = jlog_ctx_read_interval(log->readerContext, &begin, &end);
-		if (count < log->minItems)
+		int count = jlog_ctx_read_interval(queue->readerContext, &begin, &end);
+		if (count < queue->minItems)
 		{
-			std::unique_lock<std::mutex> lk(log->writerMutex);
-			if (count > 0 && log->maxInterval > 0)
+			std::unique_lock<std::mutex> lk(queue->writerMutex);
+			if (count > 0 && queue->maxInterval > 0)
 			{
-				log->writeCV.wait_until(lk, lastSend + std::chrono::seconds(log->maxInterval), [&log] { return log->writeNotify || log->quit; });
-				if (log->writeNotify)
+				queue->writeCV.wait_until(lk, lastSend + std::chrono::seconds(queue->maxInterval), [&queue] { return queue->writeNotify || queue->quit; });
+				if (queue->writeNotify)
 				{
-					log->writeNotify = false;
+					queue->writeNotify = false;
 					continue;
 				}
-				if (log->quit)
+				if (queue->quit)
 					break;
 			}
 			else
 			{
-				log->writeCV.wait(lk, [&log] { return log->writeNotify || log->quit; });
-				log->writeNotify = false;
+				queue->writeCV.wait(lk, [&queue] { return queue->writeNotify || queue->quit; });
+				queue->writeNotify = false;
 				continue;
 			}
 		}
@@ -178,31 +186,31 @@ void subscriber(std::shared_ptr<bulkQueue> log)
 
 		std::string payload;
 
-		if (log->maxItems > 1 && !log->ndjson)
+		if (queue->maxItems > 1 && !queue->ndjson)
 			payload = "[";
 
-		for (size_t items = 0; items < std::min(log->maxItems, (size_t)count); items++, JLOG_ID_ADVANCE(&begin))
+		for (size_t items = 0; items < std::min(queue->maxItems, (size_t)count); items++, JLOG_ID_ADVANCE(&begin))
 		{
 			end = begin;
 			jlog_message m;
-			if (jlog_ctx_read_message(log->readerContext, &begin, &m) != 0)
+			if (jlog_ctx_read_message(queue->readerContext, &begin, &m) != 0)
 			{
-				syslog(LOG_CRIT, "httpbulk: jlog_ctx_read_message failed: %d %s", jlog_ctx_err(log->readerContext), jlog_ctx_err_string(log->readerContext));
+				syslog(LOG_CRIT, "httpbulk: jlog_ctx_read_message failed: %d %s", jlog_ctx_err(queue->readerContext), jlog_ctx_err_string(queue->readerContext));
 				return;
 			}
-			if (log->maxItems > 1 && items != 0 && !log->ndjson)
+			if (queue->maxItems > 1 && items != 0 && !queue->ndjson)
 				payload += ",";
 			payload += std::string((char*)m.mess, m.mess_len);
-			if (log->ndjson)
+			if (queue->ndjson)
 				payload += "\n";
 		}
-		if (log->maxItems > 1 && !log->ndjson)
+		if (queue->maxItems > 1 && !queue->ndjson)
 			payload += "]";
 
 		auto h = new curlResult;
 
 		CURL* curl = curl_easy_init();
-		curl_easy_setopt(curl, CURLOPT_URL, log->url.c_str());
+		curl_easy_setopt(curl, CURLOPT_URL, queue->url.c_str());
 		curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "POST");
 		curl_easy_setopt(curl, CURLOPT_PRIVATE, (void*)h);
 
@@ -214,7 +222,7 @@ void subscriber(std::shared_ptr<bulkQueue> log)
 		curl_easy_setopt(curl, CURLOPT_POST, 1);
 		curl_easy_setopt(curl, CURLOPT_HTTPHEADER, hdrs);
 
-		if (!log->tls_verify)
+		if (!queue->tls_verify)
 			curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0);
 
 		curlQueueLock.lock();
@@ -228,16 +236,16 @@ void subscriber(std::shared_ptr<bulkQueue> log)
 
 		if (h->status == 200)
 		{
-			jlog_ctx_read_checkpoint(log->readerContext, &end);
+			jlog_ctx_read_checkpoint(queue->readerContext, &end);
 			failures = 0;
 		}
 		else
 		{
 			++failures;
 			if (failures == 1)
-				syslog(LOG_CRIT, "httpbulk: failed to send request to %s: %zu %s", log->url.c_str(), h->status, h->result.c_str());
+				syslog(LOG_CRIT, "httpbulk: failed to send request to %s: %zu %s", queue->url.c_str(), h->status, h->result.c_str());
 			if (failures > 30)
-				syslog(LOG_CRIT, "httpbulk: still unable to send request to %s: %zu %s", log->url.c_str(), h->status, h->result.c_str());
+				syslog(LOG_CRIT, "httpbulk: still unable to send request to %s: %zu %s", queue->url.c_str(), h->status, h->result.c_str());
 			sleep(1);
 		}
 
@@ -259,25 +267,25 @@ bool Halon_init(HalonInitContext* hic)
 		if (queues)
 		{
 			size_t l = 0;
-			HalonConfig* log;
-			while ((log = HalonMTA_config_array_get(queues, l++)))
+			HalonConfig* queue;
+			while ((queue = HalonMTA_config_array_get(queues, l++)))
 			{
 				auto x = std::make_shared<bulkQueue>();
 
-				const char* id = HalonMTA_config_string_get(HalonMTA_config_object_get(log, "id"), nullptr);
-				const char* path = HalonMTA_config_string_get(HalonMTA_config_object_get(log, "path"), nullptr);
-				const char* url = HalonMTA_config_string_get(HalonMTA_config_object_get(log, "url"), nullptr);
+				const char* id = HalonMTA_config_string_get(HalonMTA_config_object_get(queue, "id"), nullptr);
+				const char* path = HalonMTA_config_string_get(HalonMTA_config_object_get(queue, "path"), nullptr);
+				const char* url = HalonMTA_config_string_get(HalonMTA_config_object_get(queue, "url"), nullptr);
 
 				if (!id || !path || !url)
 					throw std::runtime_error("missing required property");
 
-				const char* format = HalonMTA_config_string_get(HalonMTA_config_object_get(log, "format"), nullptr);
-				const char* maxitems = HalonMTA_config_string_get(HalonMTA_config_object_get(log, "max_items"), nullptr);
-				const char* minitems = HalonMTA_config_string_get(HalonMTA_config_object_get(log, "min_items"), nullptr);
-				const char* maxinterval = HalonMTA_config_string_get(HalonMTA_config_object_get(log, "max_interval"), nullptr);
-				const char* tls_verify = HalonMTA_config_string_get(HalonMTA_config_object_get(log, "tls_verify"), nullptr);
+				const char* format = HalonMTA_config_string_get(HalonMTA_config_object_get(queue, "format"), nullptr);
+				const char* maxitems = HalonMTA_config_string_get(HalonMTA_config_object_get(queue, "max_items"), nullptr);
+				const char* minitems = HalonMTA_config_string_get(HalonMTA_config_object_get(queue, "min_items"), nullptr);
+				const char* maxinterval = HalonMTA_config_string_get(HalonMTA_config_object_get(queue, "max_interval"), nullptr);
+				const char* tls_verify = HalonMTA_config_string_get(HalonMTA_config_object_get(queue, "tls_verify"), nullptr);
 
-				HalonConfig* headers = HalonMTA_config_object_get(log, "headers");
+				HalonConfig* headers = HalonMTA_config_object_get(queue, "headers");
 				if (headers)
 				{
 					size_t h = 0;
