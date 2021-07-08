@@ -8,7 +8,7 @@ queues:
    path: /var/run/elastic.jlog
    format: ndjson
    url: http://54.152.103.33:9200/_bulk
-   maxitems: 500
+   max_items: 500
    tls_verify: false
  - id: custom-ndjson
    path: /var/run/custom-ndjson.jlog
