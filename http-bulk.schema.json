@@ -1,13 +1,13 @@
 {
     "$schema": "http://json-schema.org/draft-07/schema#",
     "type": "object",
-    "description": "httpbulk schema",
+    "description": "http-bulk schema",
     "additionalProperties": false,
     "properties": {
         "queues": {
             "type": "array",
             "uniqueItems": true,
-            "description": "httpbulk queues",
+            "description": "http-bulk queues",
             "items": {
                 "type": "object",
                 "required": [

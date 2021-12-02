@@ -108,7 +108,7 @@ int Halon_version()
 }
 
 HALON_EXPORT
-void httpbulk(HalonHSLContext* hhc, HalonHSLArguments* args, HalonHSLValue* ret)
+void http_bulk(HalonHSLContext* hhc, HalonHSLArguments* args, HalonHSLValue* ret)
 {
 	HalonHSLValue* id_ = HalonMTA_hsl_argument_get(args, 0);
 	if (!id_ || HalonMTA_hsl_value_type(id_) != HALONMTA_HSL_TYPE_STRING)
@@ -131,7 +131,7 @@ void httpbulk(HalonHSLContext* hhc, HalonHSLArguments* args, HalonHSLValue* ret)
 	std::unique_lock<std::mutex> lck(x->second->writerMutex);
 	if (jlog_ctx_write(x->second->writerContext, payload, payloadlen) != 0)
 	{
-		syslog(LOG_CRIT, "httpbulk: jlog_ctx_write failed: %d %s", jlog_ctx_err(x->second->writerContext), jlog_ctx_err_string(x->second->writerContext));
+		syslog(LOG_CRIT, "http_bulk: jlog_ctx_write failed: %d %s", jlog_ctx_err(x->second->writerContext), jlog_ctx_err_string(x->second->writerContext));
 	}
 	else
 	{
@@ -195,7 +195,7 @@ void subscriber(std::shared_ptr<bulkQueue> queue)
 			jlog_message m;
 			if (jlog_ctx_read_message(queue->readerContext, &begin, &m) != 0)
 			{
-				syslog(LOG_CRIT, "httpbulk: jlog_ctx_read_message failed: %d %s", jlog_ctx_err(queue->readerContext), jlog_ctx_err_string(queue->readerContext));
+				syslog(LOG_CRIT, "http_bulk: jlog_ctx_read_message failed: %d %s", jlog_ctx_err(queue->readerContext), jlog_ctx_err_string(queue->readerContext));
 				return;
 			}
 			if (queue->maxItems > 1 && items != 0 && !queue->ndjson)
@@ -243,9 +243,9 @@ void subscriber(std::shared_ptr<bulkQueue> queue)
 		{
 			++failures;
 			if (failures == 1)
-				syslog(LOG_CRIT, "httpbulk: failed to send request to %s: %zu %s", queue->url.c_str(), h->status, h->result.c_str());
+				syslog(LOG_CRIT, "http_bulk: failed to send request to %s: %zu %s", queue->url.c_str(), h->status, h->result.c_str());
 			if (failures > 30)
-				syslog(LOG_CRIT, "httpbulk: still unable to send request to %s: %zu %s", queue->url.c_str(), h->status, h->result.c_str());
+				syslog(LOG_CRIT, "http_bulk: still unable to send request to %s: %zu %s", queue->url.c_str(), h->status, h->result.c_str());
 			sleep(1);
 		}
 
@@ -327,7 +327,7 @@ bool Halon_init(HalonInitContext* hic)
 			}
 		}
 	} catch (const std::runtime_error& e) {
-		syslog(LOG_CRIT, "httpbulk: %s", e.what());
+		syslog(LOG_CRIT, "http_bulk: %s", e.what());
 		return false;
 	}
 
@@ -356,6 +356,6 @@ void Halon_cleanup()
 HALON_EXPORT
 bool Halon_hsl_register(HalonHSLRegisterContext* ptr)
 {
-	HalonMTA_hsl_register_function(ptr, "httpbulk", &httpbulk);
+	HalonMTA_hsl_register_function(ptr, "http_bulk", &http_bulk);
 	return true;
 }

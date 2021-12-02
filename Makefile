@@ -1,4 +1,4 @@
-all: httpbulk
+all: http-bulk
 
-httpbulk:
-	g++ -L/usr/local/lib/ -I/opt/halon/include/ -I/usr/local/include/ -fPIC -shared httpbulk.cpp -lcurl -ljlog -o httpbulk.so
+http-bulk:
+	g++ -L/usr/local/lib/ -I/opt/halon/include/ -I/usr/local/include/ -fPIC -shared http-bulk.cpp -lcurl -ljlog -o http-bulk.so
