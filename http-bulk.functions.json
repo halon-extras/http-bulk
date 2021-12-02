@@ -1,0 +1,22 @@
+[
+    {
+        "name": "http_bulk",
+        "parameters": {
+            "required": [
+                {
+                    "name": "id",
+                    "type": "string"
+                },
+                {
+                    "name": "json",
+                    "type": "string"
+                }
+            ]
+        },
+        "returnType": "boolean or none",
+        "detail": "http_bulk(string $id, string $json): boolean or none",
+        "value": "http_bulk($0)",
+        "documentation": "Send JSON data bulked to a HTTP endpoint.",
+        "link": "[Full documentation](https://github.com/halon-extras/http-bulk)"
+    }
+] 
