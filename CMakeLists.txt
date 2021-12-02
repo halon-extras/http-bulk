@@ -40,6 +40,7 @@ ENDIF()
 INSTALL(FILES "${CMAKE_CURRENT_BINARY_DIR}/http-bulk.so.link" DESTINATION plugins/autoload/smtpd RENAME http-bulk.so)
 
 INSTALL(FILES "LICENSE" DESTINATION share/doc/plugins/http-bulk)
+INSTALL(FILES "/jlog/LICENSE" DESTINATION share/doc/plugins/http-bulk RENAME LICENSE.jlog)
 
 SET(CPACK_PACKAGING_INSTALL_PREFIX "/opt/halon")
 IF (CPACK_GENERATOR MATCHES "DEB")
