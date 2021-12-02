@@ -30,6 +30,8 @@ IF(EXISTS "/etc/os-release")
 ENDIF()
 
 INSTALL(FILES ${CMAKE_CURRENT_BINARY_DIR}/http-bulk.so DESTINATION plugins)
+INSTALL(FILES http-bulk.schema.json DESTINATION share/plugins)
+INSTALL(FILES http-bulk.functions.json DESTINATION share/plugins)
 
 IF(${CMAKE_VERSION} VERSION_GREATER_EQUAL "3.14.0") 
 	FILE(CREATE_LINK "/opt/halon/plugins/http-bulk.so" "${CMAKE_CURRENT_BINARY_DIR}/http-bulk.so.link" SYMBOLIC)
