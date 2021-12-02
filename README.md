@@ -1,6 +1,6 @@
 # HTTP bulk plugin
 
-This plugin allows you to send JSON data bulked to HTTP endpoints (```http_bulk(id, json-data)```). The queue is file-backed and uses a [jlog](https://github.com/omniti-labs/jlog) database. To use this plugin also add the libjlog.so file to any of the lib/ folders if it's not installed by a package manager (eg. /usr/local/lib).
+This plugin allows you to send JSON data bulked to HTTP endpoints (```http_bulk(id, json-data)```). The queue is file-backed and uses a [jlog](https://github.com/omniti-labs/jlog) database. Build and install the jlog library with ```CFLAGS=-fPIC ./configure```.
 
 ## Configuration example
 
