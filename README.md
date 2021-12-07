@@ -1,15 +1,32 @@
 # HTTP bulk plugin
 
-This plugin allows you to send JSON data bulked to HTTP endpoints (```http_bulk(id, json-data)```). The queue is file-backed and uses a [jlog](https://github.com/omniti-labs/jlog) database. Build and install the jlog library with ```CFLAGS=-fPIC ./configure```.
+This plugin allows you to send JSON data bulked to HTTP endpoints (```http_bulk(id, json-data)```). The queue is file-backed and uses a [jlog](https://github.com/omniti-labs/jlog) database.
 
-## Configuration example
+## Installation
+
+Follow the [instructions](https://docs.halon.io/manual/comp_install.html#installation) in our manual to add our package repository and then run the below command.
+
+### Ubuntu
+
+```
+apt-get install halon-extras-http-bulk
+```
+
+### RHEL
+
+```
+yum install halon-extras-http-bulk
+```
+
+## Configuration
+
+For the configuration schema, see [http-bulk.schema.json](http-bulk.schema.json). Below is a sample configuration.
 
 ### smtpd.yaml
 
 ```
 plugins:
   - id: http-bulk
-    path: /opt/halon/plugins/http-bulk.so
     config:
       queues:
         - id: elastic
