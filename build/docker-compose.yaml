@@ -17,3 +17,12 @@ services:
         HALON_REPO_PASS: ${HALON_REPO_PASS}
     volumes:
       - ../:/plugin
+  centos-8:
+    build:
+      context: ./centos-8
+      dockerfile: ./Dockerfile
+      args:
+        HALON_REPO_USER: ${HALON_REPO_USER}
+        HALON_REPO_PASS: ${HALON_REPO_PASS}
+    volumes:
+      - ../:/plugin
