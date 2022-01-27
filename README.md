@@ -32,7 +32,7 @@ plugins:
         - id: elastic
           path: /var/run/elastic.jlog
           format: ndjson
-          url: https://1.2.3.4:9200/_bulk
+          url: "https://1.2.3.4:9200/_bulk"
           max_items: 500
           tls_verify: false
         - id: custom-ndjson
@@ -53,7 +53,7 @@ plugins:
           min_items: 1000
           max_interval: 60
           tls_verify: true
-          preamble: "header1,header2,header3"
+          preamble: "header1,header2,header3\n"
           headers:
             - "Content-Type: text/csv"
             - "Authorization: Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ=="
