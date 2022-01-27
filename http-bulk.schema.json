@@ -12,8 +12,8 @@
                 "type": "object",
                 "required": [
                     "id",
-                "path",
-                "url"
+                    "path",
+                    "url"
                 ],
                 "additionalProperties": false,
                 "properties": {
@@ -31,7 +31,7 @@
                     },
                     "format": {
                         "type": "string",
-                        "enum": ["ndjson", "jsonarray"],
+                        "enum": ["ndjson", "jsonarray", "custom"],
                         "default": "jsonarray",
                         "description": "JSON bulk format"
                     },
@@ -54,6 +54,14 @@
                         "type": "boolean",
                         "description": "Verify TLS of https endpoint",
                         "default": true
+                    },
+                    "preamble": {
+                        "type": "string",
+                        "description": "Preamble to add before the data (for each request)"
+                    },
+                    "postamble": {
+                        "type": "string",
+                        "description": "Postamble to add before the data (for each request)"
                     },
                     "headers": {
                         "type": "array",

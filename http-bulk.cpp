@@ -12,6 +12,13 @@
 #include <memory>
 #include <map>
 
+enum format_t
+{
+	F_NDJSON,
+	F_JSONARRAY,
+	F_CUSTOM
+};
+
 struct bulkQueue
 {
 	bool quit = false;
@@ -28,7 +35,8 @@ struct bulkQueue
 	size_t maxInterval = 0;
 
 	std::string url;
-	bool ndjson = false;
+	std::string preamble, postamble;
+	format_t format = F_JSONARRAY;
 	bool tls_verify = true;
 	std::vector<std::string> headers;
 };
@@ -150,10 +158,18 @@ void subscriber(std::shared_ptr<bulkQueue> queue)
 	auto lastSend = std::chrono::steady_clock::now();
 
 	struct curl_slist* hdrs = nullptr;
-	if (queue->ndjson)
-		hdrs = curl_slist_append(hdrs, "Content-Type: application/x-ndjson");
-	else
-		hdrs = curl_slist_append(hdrs, "Content-Type: application/json");
+	switch (queue->format)
+	{
+		case F_NDJSON:
+			hdrs = curl_slist_append(hdrs, "Content-Type: application/x-ndjson");
+		break;
+		case F_JSONARRAY:
+			hdrs = curl_slist_append(hdrs, "Content-Type: application/json");
+		break;
+		case F_CUSTOM:
+			/* no header */
+		break;
+	}
 	for (const auto & i : queue->headers)
 		hdrs = curl_slist_append(hdrs, i.c_str());
 
@@ -184,10 +200,10 @@ void subscriber(std::shared_ptr<bulkQueue> queue)
 		}
 		lastSend = std::chrono::steady_clock::now();
 
-		std::string payload;
+		std::string payload = queue->preamble;
 
-		if (queue->maxItems > 1 && !queue->ndjson)
-			payload = "[";
+		if (queue->maxItems > 1 && queue->format == F_JSONARRAY)
+			payload += "[";
 
 		for (size_t items = 0; items < std::min(queue->maxItems, (size_t)count); items++, JLOG_ID_ADVANCE(&begin))
 		{
@@ -198,14 +214,15 @@ void subscriber(std::shared_ptr<bulkQueue> queue)
 				syslog(LOG_CRIT, "http_bulk: jlog_ctx_read_message failed: %d %s", jlog_ctx_err(queue->readerContext), jlog_ctx_err_string(queue->readerContext));
 				return;
 			}
-			if (queue->maxItems > 1 && items != 0 && !queue->ndjson)
+			if (queue->maxItems > 1 && items != 0 && queue->format == F_JSONARRAY)
 				payload += ",";
 			payload += std::string((char*)m.mess, m.mess_len);
-			if (queue->ndjson)
+			if (queue->format == F_NDJSON)
 				payload += "\n";
 		}
-		if (queue->maxItems > 1 && !queue->ndjson)
+		if (queue->maxItems > 1 && queue->format == F_JSONARRAY)
 			payload += "]";
+		payload += queue->postamble;
 
 		auto h = new curlResult;
 
@@ -284,6 +301,8 @@ bool Halon_init(HalonInitContext* hic)
 				const char* minitems = HalonMTA_config_string_get(HalonMTA_config_object_get(queue, "min_items"), nullptr);
 				const char* maxinterval = HalonMTA_config_string_get(HalonMTA_config_object_get(queue, "max_interval"), nullptr);
 				const char* tls_verify = HalonMTA_config_string_get(HalonMTA_config_object_get(queue, "tls_verify"), nullptr);
+				const char* preamble = HalonMTA_config_string_get(HalonMTA_config_object_get(queue, "preamble"), nullptr);
+				const char* postamble = HalonMTA_config_string_get(HalonMTA_config_object_get(queue, "postamble"), nullptr);
 
 				HalonConfig* headers = HalonMTA_config_object_get(queue, "headers");
 				if (headers)
@@ -314,11 +333,14 @@ bool Halon_init(HalonInitContext* hic)
 				x->readerContext = ctx;
 
 				x->url = url;
-				x->ndjson = !format || strcmp(format, "ndjson") == 0 ? true : false;
+				x->format = !format || strcmp(format, "ndjson") == 0 ? F_NDJSON :
+							strcmp(format, "jsonarray") == 0 ? F_JSONARRAY : F_CUSTOM;
 				x->tls_verify = !tls_verify || strcmp(tls_verify, "true") == 0 ? true : false;
 				x->maxItems = !maxitems ? 1 : strtoul(maxitems, nullptr, 10);
 				x->minItems = !minitems ? 1 : strtoul(minitems, nullptr, 10);
 				x->maxInterval = !maxinterval ? 0 : strtoul(maxinterval, nullptr, 10);
+				x->preamble = preamble ? preamble : "";
+				x->postamble = postamble ? postamble : "";
 				x->subscriberThread = std::thread([x] {
 					subscriber(x);
 				});

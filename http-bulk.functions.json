@@ -8,15 +8,15 @@
                     "type": "string"
                 },
                 {
-                    "name": "json",
+                    "name": "data",
                     "type": "string"
                 }
             ]
         },
         "returnType": "boolean or none",
-        "detail": "http_bulk(string $id, string $json): boolean or none",
+        "detail": "http_bulk(string $id, string $data): boolean or none",
         "value": "http_bulk($0)",
-        "documentation": "Send JSON data bulked to a HTTP endpoint.",
+        "documentation": "Send data bulked to a HTTP endpoint.",
         "link": "[Full documentation](https://github.com/halon-extras/http-bulk)"
     }
 ] 
