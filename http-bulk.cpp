@@ -76,7 +76,10 @@ void curl_multi()
 				curl_easy_getinfo(e, CURLINFO_PRIVATE, &h);
 
 				if (m->data.result != CURLE_OK)
+				{
 					h->status = -1;
+					h->result = curl_easy_strerror(m->data.result);
+				}
 				else
 					curl_easy_getinfo(e, CURLINFO_RESPONSE_CODE, &h->status);
 
@@ -260,9 +263,9 @@ void subscriber(std::shared_ptr<bulkQueue> queue)
 		{
 			++failures;
 			if (failures == 1)
-				syslog(LOG_CRIT, "http_bulk: failed to send request to %s: %zu %s", queue->url.c_str(), h->status, h->result.c_str());
+				syslog(LOG_CRIT, "http_bulk: failed to send request to %s: %zd %s", queue->url.c_str(), h->status, h->result.c_str());
 			if (failures > 30)
-				syslog(LOG_CRIT, "http_bulk: still unable to send request to %s: %zu %s", queue->url.c_str(), h->status, h->result.c_str());
+				syslog(LOG_CRIT, "http_bulk: still unable to send request to %s: %zd %s", queue->url.c_str(), h->status, h->result.c_str());
 			sleep(1);
 		}
 
