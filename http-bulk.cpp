@@ -243,7 +243,10 @@ void subscriber(std::shared_ptr<bulkQueue> queue)
 		curl_easy_setopt(curl, CURLOPT_HTTPHEADER, hdrs);
 
 		if (!queue->tls_verify)
+		{
+			curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0);
 			curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0);
+		}
 
 		curlQueueLock.lock();
 		curlQueue.push(curl);
