@@ -51,6 +51,8 @@ std::mutex curlQueueLock;
 std::queue<CURL*> curlQueue;
 
 struct curlResult {
+	std::mutex mtx;
+	bool cvv = false;
 	std::condition_variable cv;
 	long status;
 	std::string result;
@@ -83,6 +85,9 @@ void curl_multi()
 				else
 					curl_easy_getinfo(e, CURLINFO_RESPONSE_CODE, &h->status);
 
+				h->mtx.lock();
+				h->cvv = true;
+				h->mtx.unlock();
 				h->cv.notify_one();
 
 				curl_multi_remove_handle(curlMultiHandle, e);
@@ -253,9 +258,8 @@ void subscriber(std::shared_ptr<bulkQueue> queue)
 		curl_multi_wakeup(curlMultiHandle);
 		curlQueueLock.unlock();
 
-		std::mutex mtx;
-		std::unique_lock<std::mutex> lck(mtx);
-		h->cv.wait(lck);
+		std::unique_lock<std::mutex> lck(h->mtx);
+		h->cv.wait(lck, [h] { return h->cvv == true; });
 
 		if (h->status == 200)
 		{
