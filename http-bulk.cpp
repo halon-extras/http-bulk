@@ -51,6 +51,8 @@ std::mutex curlQueueLock;
 std::queue<CURL*> curlQueue;
 
 struct curlResult {
+	std::mutex mtx;
+	bool cvv = false;
 	std::condition_variable cv;
 	long status;
 	std::string result;
@@ -76,10 +78,16 @@ void curl_multi()
 				curl_easy_getinfo(e, CURLINFO_PRIVATE, &h);
 
 				if (m->data.result != CURLE_OK)
+				{
 					h->status = -1;
+					h->result = curl_easy_strerror(m->data.result);
+				}
 				else
 					curl_easy_getinfo(e, CURLINFO_RESPONSE_CODE, &h->status);
 
+				h->mtx.lock();
+				h->cvv = true;
+				h->mtx.unlock();
 				h->cv.notify_one();
 
 				curl_multi_remove_handle(curlMultiHandle, e);
@@ -240,16 +248,18 @@ void subscriber(std::shared_ptr<bulkQueue> queue)
 		curl_easy_setopt(curl, CURLOPT_HTTPHEADER, hdrs);
 
 		if (!queue->tls_verify)
+		{
+			curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0);
 			curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0);
+		}
 
 		curlQueueLock.lock();
 		curlQueue.push(curl);
 		curl_multi_wakeup(curlMultiHandle);
 		curlQueueLock.unlock();
 
-		std::mutex mtx;
-		std::unique_lock<std::mutex> lck(mtx);
-		h->cv.wait(lck);
+		std::unique_lock<std::mutex> lck(h->mtx);
+		h->cv.wait(lck, [h] { return h->cvv == true; });
 
 		if (h->status == 200)
 		{
@@ -260,9 +270,9 @@ void subscriber(std::shared_ptr<bulkQueue> queue)
 		{
 			++failures;
 			if (failures == 1)
-				syslog(LOG_CRIT, "http_bulk: failed to send request to %s: %zu %s", queue->url.c_str(), h->status, h->result.c_str());
+				syslog(LOG_CRIT, "http_bulk: failed to send request to %s: %zd %s", queue->url.c_str(), h->status, h->result.c_str());
 			if (failures > 30)
-				syslog(LOG_CRIT, "http_bulk: still unable to send request to %s: %zu %s", queue->url.c_str(), h->status, h->result.c_str());
+				syslog(LOG_CRIT, "http_bulk: still unable to send request to %s: %zd %s", queue->url.c_str(), h->status, h->result.c_str());
 			sleep(1);
 		}
 
