@@ -18,6 +18,30 @@ apt-get install halon-extras-http-bulk
 yum install halon-extras-http-bulk
 ```
 
+## Commands
+
+This plugin can be controlled using the ``halonctl`` tool. The following commands are available though ``halonctl plugin command http-bulk ...``.
+
+| Command | |
+|------|------|
+| start <queue> | Resume the queue if stopped |
+| start-one <queue> | Resume the queue if stopped, with maxItems = 1, useful for debugging |
+| stop <queue> | Stop the queue |
+| status <queue> | Show the current status of the queue |
+| count <queue> | Show items in queue |
+| head <queue> | Show the first item in queue |
+| pop <queue> | Remove the first item in queue |
+| clear <queue> | Clear the queue |
+| last-error <queue> | Show the last http error from the queue |
+
+Example 
+
+```
+halonctl plugin command http-bulk stop elastic 
+halonctl plugin command http-bulk clear elastic 
+halonctl plugin command http-bulk start elastic 
+```
+
 ## Configuration
 
 For the configuration schema, see [http-bulk.schema.json](http-bulk.schema.json). Below is a sample configuration.
