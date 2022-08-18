@@ -19,8 +19,19 @@ enum format_t
 	F_CUSTOM
 };
 
+enum runstate_t
+{
+	RS_STARTED,
+	RS_STOPPING,
+	RS_STOPPED,
+};
+
 struct bulkQueue
 {
+	std::mutex runMutex;
+	std::condition_variable runCV;
+	runstate_t runstate = RS_STARTED;
+
 	bool quit = false;
 	std::thread subscriberThread;
 
@@ -30,6 +41,7 @@ struct bulkQueue
 	jlog_ctx* writerContext;
 	jlog_ctx* readerContext;
 
+	bool oneItem = false;
 	size_t minItems = 1;
 	size_t maxItems = 1;
 	size_t maxInterval = 0;
@@ -39,6 +51,8 @@ struct bulkQueue
 	format_t format = F_JSONARRAY;
 	bool tls_verify = true;
 	std::vector<std::string> headers;
+
+	std::string error;
 };
 
 std::map<std::string, std::shared_ptr<bulkQueue>> bulkQueues;
@@ -183,8 +197,16 @@ void subscriber(std::shared_ptr<bulkQueue> queue)
 
 	while (!queue->quit)
 	{
+		/* check if runstate running */
+		{
+			std::unique_lock lk(queue->runMutex);
+			queue->runCV.wait(lk, [queue]{ queue->runstate = queue->runstate != RS_STARTED ? RS_STOPPED : RS_STARTED; return queue->runstate == RS_STARTED || queue->quit; });
+		}
+
 		jlog_id begin, end;
 		int count = jlog_ctx_read_interval(queue->readerContext, &begin, &end);
+		if (queue->oneItem && count > 0)
+			goto send;
 		if (count < queue->minItems)
 		{
 			std::unique_lock<std::mutex> lk(queue->writerMutex);
@@ -206,6 +228,8 @@ void subscriber(std::shared_ptr<bulkQueue> queue)
 				continue;
 			}
 		}
+
+send:
 		lastSend = std::chrono::steady_clock::now();
 
 		std::string payload = queue->preamble;
@@ -227,6 +251,8 @@ void subscriber(std::shared_ptr<bulkQueue> queue)
 			payload += std::string((char*)m.mess, m.mess_len);
 			if (queue->format == F_NDJSON)
 				payload += "\n";
+			if (queue->oneItem)
+				break;
 		}
 		if (queue->maxItems > 1 && queue->format == F_JSONARRAY)
 			payload += "]";
@@ -263,11 +289,19 @@ void subscriber(std::shared_ptr<bulkQueue> queue)
 
 		if (h->status == 200)
 		{
+			queue->runMutex.lock();
+			queue->error.clear();
+			queue->runMutex.unlock();
+
 			jlog_ctx_read_checkpoint(queue->readerContext, &end);
 			failures = 0;
 		}
 		else
 		{
+			queue->runMutex.lock();
+			queue->error = std::to_string(h->status) + " " + h->result;
+			queue->runMutex.unlock();
+
 			++failures;
 			if (failures == 1)
 				syslog(LOG_CRIT, "http_bulk: failed to send request to %s: %zd %s", queue->url.c_str(), h->status, h->result.c_str());
@@ -279,6 +313,215 @@ void subscriber(std::shared_ptr<bulkQueue> queue)
 		delete h;
 	}
 	curl_slist_free_all(hdrs);
+}
+
+HALON_EXPORT
+bool Halon_command_execute(HalonCommandExecuteContext* hcec, size_t argc, const char* argv[], size_t argvl[], char** out, size_t* outlen)
+{
+	if (argc > 1 && (strcmp(argv[0], "start") == 0 || strcmp(argv[0], "start-one") == 0))
+	{
+		auto h = bulkQueues.find(argv[1]);
+		if (h == bulkQueues.end())
+		{
+			*out = strdup("No such queue");
+			return false;
+		}
+
+		h->second->runMutex.lock();
+		h->second->runstate = RS_STARTED;
+		h->second->oneItem = strcmp(argv[0], "start-one") == 0;
+		h->second->runMutex.unlock();
+		h->second->runCV.notify_one();
+
+		std::unique_lock<std::mutex> lck(h->second->writerMutex);
+		h->second->writeNotify = true;
+		h->second->writeCV.notify_one();
+
+		*out = strdup("OK");
+		return true;
+	}
+	if (argc > 1 && strcmp(argv[0], "stop") == 0)
+	{
+		auto h = bulkQueues.find(argv[1]);
+		if (h == bulkQueues.end())
+		{
+			*out = strdup("No such queue");
+			return false;
+		}
+
+		h->second->runMutex.lock();
+		h->second->runstate = RS_STOPPING;
+		h->second->runMutex.unlock();
+		h->second->runCV.notify_one();
+
+		std::unique_lock<std::mutex> lck(h->second->writerMutex);
+		h->second->writeNotify = true;
+		h->second->writeCV.notify_one();
+
+		*out = strdup("OK");
+		return true;
+	}
+	if (argc > 1 && strcmp(argv[0], "status") == 0)
+	{
+		auto h = bulkQueues.find(argv[1]);
+		if (h == bulkQueues.end())
+		{
+			*out = strdup("No such queue");
+			return false;
+		}
+
+		h->second->runMutex.lock();
+		switch (h->second->runstate)
+		{
+			case RS_STARTED:
+				*out = strdup("Started");
+			break;
+			case RS_STOPPING:
+				*out = strdup("Stopping");
+			break;
+			case RS_STOPPED:
+				*out = strdup("Stopped");
+			break;
+		}
+		h->second->runMutex.unlock();
+
+		return true;
+	}
+	if (argc > 1 && strcmp(argv[0], "last-error") == 0)
+	{
+		auto h = bulkQueues.find(argv[1]);
+		if (h == bulkQueues.end())
+		{
+			*out = strdup("No such queue");
+			return false;
+		}
+
+		h->second->runMutex.lock();
+		if (h->second->error.empty())
+		{
+			h->second->runMutex.unlock();
+			*out = strdup("No last error");
+			return false;
+		}
+
+		*out = strdup(h->second->error.c_str());
+		*outlen = h->second->error.size();
+		h->second->runMutex.unlock();
+
+		return true;
+	}
+	if (argc > 1 && strcmp(argv[0], "count") == 0)
+	{
+		auto h = bulkQueues.find(argv[1]);
+		if (h == bulkQueues.end())
+		{
+			*out = strdup("No such queue");
+			return false;
+		}
+
+		jlog_id begin, end;
+		int count = jlog_ctx_read_interval(h->second->readerContext, &begin, &end);
+		*out = strdup(std::to_string(count).c_str());
+		return true;
+	}
+	if (argc > 1 && strcmp(argv[0], "head") == 0)
+	{
+		auto h = bulkQueues.find(argv[1]);
+		if (h == bulkQueues.end())
+		{
+			*out = strdup("No such queue");
+			return false;
+		}
+
+		std::unique_lock<std::mutex> lck(h->second->runMutex);
+		if (h->second->runstate != RS_STOPPED)
+		{
+			*out = strdup("Queue must be stopped");
+			return false;
+		}
+
+		jlog_id begin, end;
+		int count = jlog_ctx_read_interval(h->second->readerContext, &begin, &end);
+		if (count < 1)
+		{
+			*out = strdup("Queue is empty");
+			return false;
+		}
+		jlog_message m;
+		if (jlog_ctx_read_message(h->second->readerContext, &begin, &m) != 0)
+		{
+			*out = strdup(jlog_ctx_err_string(h->second->readerContext));
+			return false;
+		}
+		if (m.mess_len > 0)
+		{
+			*out = (char*)malloc(m.mess_len);
+			memcpy(*out, m.mess, m.mess_len);
+			*outlen = m.mess_len;
+		}
+		return true;
+	}
+	if (argc > 1 && strcmp(argv[0], "pop") == 0)
+	{
+		auto h = bulkQueues.find(argv[1]);
+		if (h == bulkQueues.end())
+		{
+			*out = strdup("No such queue");
+			return false;
+		}
+
+		std::unique_lock<std::mutex> lck(h->second->runMutex);
+		if (h->second->runstate != RS_STOPPED)
+		{
+			*out = strdup("Queue must be stopped");
+			return false;
+		}
+
+		jlog_id begin, end;
+		int count = jlog_ctx_read_interval(h->second->readerContext, &begin, &end);
+		if (count < 1)
+		{
+			*out = strdup("Queue is empty");
+			return false;
+		}
+		if (jlog_ctx_read_checkpoint(h->second->readerContext, &begin) != 0)
+		{
+			*out = strdup(jlog_ctx_err_string(h->second->readerContext));
+			return false;
+		}
+
+		*out = strdup("OK");
+		return true;
+	}
+	if (argc > 1 && strcmp(argv[0], "clear") == 0)
+	{
+		auto h = bulkQueues.find(argv[1]);
+		if (h == bulkQueues.end())
+		{
+			*out = strdup("No such queue");
+			return false;
+		}
+
+		std::unique_lock<std::mutex> lck(h->second->runMutex);
+		if (h->second->runstate != RS_STOPPED)
+		{
+			*out = strdup("Queue must be stopped");
+			return false;
+		}
+
+		jlog_id begin, end;
+		int count = jlog_ctx_read_interval(h->second->readerContext, &begin, &end);
+		if (count > 0 && jlog_ctx_read_checkpoint(h->second->readerContext, &end) != 0)
+		{
+			*out = strdup(jlog_ctx_err_string(h->second->readerContext));
+			return false;
+		}
+		*out = strdup("OK");
+		return true;
+	}
+
+	*out = strdup("start|start-one|stop|status|count|head|pop|clear|last-error <queue>");
+	return false;
 }
 
 HALON_EXPORT
@@ -368,7 +611,7 @@ bool Halon_init(HalonInitContext* hic)
 
 	return true;
 }
- 
+
 HALON_EXPORT
 void Halon_cleanup()
 {
@@ -376,6 +619,7 @@ void Halon_cleanup()
 	{
 		i.second->quit = true;
 		i.second->writeCV.notify_all();
+		i.second->runCV.notify_one();
 		i.second->subscriberThread.join();
 		jlog_ctx_close(i.second->writerContext);
 		jlog_ctx_close(i.second->readerContext);
