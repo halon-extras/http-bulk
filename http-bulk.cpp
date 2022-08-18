@@ -419,6 +419,13 @@ bool Halon_command_execute(HalonCommandExecuteContext* hcec, size_t argc, const 
 			return false;
 		}
 
+		std::unique_lock<std::mutex> lck(h->second->runMutex);
+		if (h->second->runstate != RS_STOPPED)
+		{
+			*out = strdup("Queue must be stopped");
+			return false;
+		}
+
 		jlog_id begin, end;
 		int count = jlog_ctx_read_interval(h->second->readerContext, &begin, &end);
 		*out = strdup(std::to_string(count).c_str());
