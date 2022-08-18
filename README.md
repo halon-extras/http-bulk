@@ -24,15 +24,15 @@ This plugin can be controlled using the ``halonctl`` tool. The following command
 
 | Command | |
 |------|------|
-| start <queue> | Resume the queue if stopped |
-| start-one <queue> | Resume the queue if stopped, with maxItems = 1, useful for debugging |
-| stop <queue> | Stop the queue |
-| status <queue> | Show the current status of the queue |
-| count <queue> | Show items in queue |
-| head <queue> | Show the first item in queue |
-| pop <queue> | Remove the first item in queue |
-| clear <queue> | Clear the queue |
-| last-error <queue> | Show the last http error from the queue |
+| start \<queue> | Resume the queue if stopped |
+| start-one \<queue> | Resume the queue if stopped, with maxItems = 1, useful for debugging |
+| stop \<queue> | Stop the queue |
+| status \<queue> | Show the current status of the queue |
+| count \<queue> | Show items in queue |
+| head \<queue> | Show the first item in queue |
+| pop \<queue> | Remove the first item in queue |
+| clear \<queue> | Clear the queue |
+| last-error \<queue> | Show the last http error from the queue |
 
 Example 
 
