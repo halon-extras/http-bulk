@@ -199,7 +199,7 @@ void subscriber(std::shared_ptr<bulkQueue> queue)
 	{
 		/* check if runstate running */
 		{
-			std::unique_lock lk(queue->runMutex);
+			std::unique_lock<std::mutex> lk(queue->runMutex);
 			queue->runCV.wait(lk, [queue]{ queue->runstate = queue->runstate != RS_STARTED ? RS_STOPPED : RS_STARTED; return queue->runstate == RS_STARTED || queue->quit; });
 		}
 
