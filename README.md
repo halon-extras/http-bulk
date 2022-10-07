@@ -87,5 +87,5 @@ plugins:
 
 ```
 import { http_bulk } from "extras://http-bulk";
-httpbulk("elastic", json_encode({}));
+http_bulk("elastic", json_encode({}));
 ```
