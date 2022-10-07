@@ -82,3 +82,10 @@ plugins:
             - "Content-Type: text/csv"
             - "Authorization: Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ=="
 ```
+
+## Example
+
+```
+import { http_bulk } from "extras://http-bulk";
+httpbulk("elastic", json_encode({}));
+```
