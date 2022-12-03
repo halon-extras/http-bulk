@@ -284,30 +284,33 @@ send:
 		curl_multi_wakeup(curlMultiHandle);
 		curlQueueLock.unlock();
 
-		std::unique_lock<std::mutex> lck(h->mtx);
-		h->cv.wait(lck, [h] { return h->cvv == true; });
-
-		if (h->status == 200)
+		/* unique_lock scope: due to delete */
 		{
-			queue->runMutex.lock();
-			queue->error.clear();
-			queue->runMutex.unlock();
+			std::unique_lock<std::mutex> lck(h->mtx);
+			h->cv.wait(lck, [h] { return h->cvv == true; });
 
-			jlog_ctx_read_checkpoint(queue->readerContext, &end);
-			failures = 0;
-		}
-		else
-		{
-			queue->runMutex.lock();
-			queue->error = std::to_string(h->status) + " " + h->result;
-			queue->runMutex.unlock();
+			if (h->status == 200)
+			{
+				queue->runMutex.lock();
+				queue->error.clear();
+				queue->runMutex.unlock();
 
-			++failures;
-			if (failures == 1)
-				syslog(LOG_CRIT, "http_bulk: failed to send request to %s: %zd %s", queue->url.c_str(), h->status, h->result.c_str());
-			if (failures > 30)
-				syslog(LOG_CRIT, "http_bulk: still unable to send request to %s: %zd %s", queue->url.c_str(), h->status, h->result.c_str());
-			sleep(1);
+				jlog_ctx_read_checkpoint(queue->readerContext, &end);
+				failures = 0;
+			}
+			else
+			{
+				queue->runMutex.lock();
+				queue->error = std::to_string(h->status) + " " + h->result;
+				queue->runMutex.unlock();
+
+				++failures;
+				if (failures == 1)
+					syslog(LOG_CRIT, "http_bulk: failed to send request to %s: %zd %s", queue->url.c_str(), h->status, h->result.c_str());
+				if (failures > 30)
+					syslog(LOG_CRIT, "http_bulk: still unable to send request to %s: %zd %s", queue->url.c_str(), h->status, h->result.c_str());
+				sleep(1);
+			}
 		}
 
 		delete h;
