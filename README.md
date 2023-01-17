@@ -46,6 +46,15 @@ halonctl plugin command http-bulk start elastic
 
 For the configuration schema, see [http-bulk.schema.json](http-bulk.schema.json). Below is a sample configuration.
 
+> **_Important!_**
+> 
+> If using the `/var/log/halon/` folder as in the sample below and it does not exist, when you create it - give it the same permission as the `smtpd` process is using. Eg.
+> ```
+> mkdir /var/log/halon
+> chown halon:staff /var/log/halon
+> ```
+> 
+
 ### smtpd.yaml
 
 ```
@@ -54,13 +63,13 @@ plugins:
     config:
       queues:
         - id: elastic
-          path: /var/run/elastic.jlog
+          path: /var/log/halon/elastic.jlog
           format: ndjson
           url: "https://1.2.3.4:9200/_bulk"
           max_items: 500
           tls_verify: false
         - id: custom-ndjson
-          path: /var/run/custom-ndjson.jlog
+          path: /var/log/halon/custom-ndjson.jlog
           format: "ndjson"
           url: "http://1.2.3.4:8080/ndjson"
           max_items: 1000
@@ -70,7 +79,7 @@ plugins:
           headers:
             - "Authorization: Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ=="
         - id: custom-csv
-          path: /var/run/custom-csv.jlog
+          path: /var/log/halon/custom-csv.jlog
           format: "custom"
           url: "http://1.2.3.4:8080/csv"
           max_items: 1000
@@ -88,4 +97,17 @@ plugins:
 ```
 import { http_bulk } from "extras://http-bulk";
 http_bulk("elastic", json_encode([]));
+```
+
+## Autoload
+
+This plugin creates files needed and used by the `smtpd` process, hence this plugin does not autoload when running the `hsh` script interpreter. There are two issues that may occur
+
+1) Bad file permission if logs are created by the user running `hsh` not the `smtpd` process.
+2) Mulitple subscribers on the logs file (`smtpd` and `hsh`). Do use this plugin in `hsh` if `smtpd` is running and vice versa.
+
+To overcome the first issue, run `hsh` as `root` and use the `--privdrop` flag to become the same user as `smtpd` is using.
+
+```
+hsh --privdrop --plugin logger
 ```
