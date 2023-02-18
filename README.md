@@ -109,5 +109,5 @@ This plugin creates files needed and used by the `smtpd` process, hence this plu
 To overcome the first issue, run `hsh` as `root` and use the `--privdrop` flag to become the same user as `smtpd` is using.
 
 ```
-hsh --privdrop --plugin logger
+hsh --privdrop --plugin http-bulk
 ```
