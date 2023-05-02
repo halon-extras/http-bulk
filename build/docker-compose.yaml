@@ -35,3 +35,12 @@ services:
         HALON_REPO_PASS: ${HALON_REPO_PASS}
     volumes:
       - ../:/plugin
+  rocky-9:
+    build:
+      context: ./rocky-9
+      dockerfile: ./Dockerfile
+      args:
+        HALON_REPO_USER: ${HALON_REPO_USER}
+        HALON_REPO_PASS: ${HALON_REPO_PASS}
+    volumes:
+      - ../:/plugin
