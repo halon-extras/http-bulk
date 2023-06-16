@@ -74,6 +74,7 @@ struct curlResult {
 
 void curl_multi()
 {
+	pthread_setname_np(pthread_self(), "p/http-bulk/req");
 	do {
 		CURLMcode mc;
 
@@ -605,6 +606,7 @@ bool Halon_init(HalonInitContext* hic)
 				x->preamble = preamble ? preamble : "";
 				x->postamble = postamble ? postamble : "";
 				x->subscriberThread = std::thread([x] {
+					pthread_setname_np(pthread_self(), "p/http-bulk/sub");
 					subscriber(x);
 				});
 
