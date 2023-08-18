@@ -581,19 +581,19 @@ bool Halon_init(HalonInitContext* hic)
 				if (jlog_ctx_init(ctx) != 0)
 				{
 					if (jlog_ctx_err(ctx) != JLOG_ERR_CREATE_EXISTS)
-						throw std::runtime_error(jlog_ctx_err_string(ctx));
+						throw std::runtime_error(path + std::string(": ") + jlog_ctx_err_string(ctx));
 					jlog_ctx_add_subscriber(ctx, "subscriber1", JLOG_BEGIN);
 				}
 				jlog_ctx_close(ctx);
 				ctx = jlog_new(path);
 				if (jlog_ctx_open_writer(ctx) != 0)
-					throw std::runtime_error(jlog_ctx_err_string(ctx));
+					throw std::runtime_error(path + std::string(": ") + jlog_ctx_err_string(ctx));
 				x->writerContext = ctx;
 
 				ctx = jlog_new(path);
 				jlog_ctx_add_subscriber(ctx, "subscriber1", JLOG_BEGIN);
 				if (jlog_ctx_open_reader(ctx, "subscriber1") != 0)
-					throw std::runtime_error(jlog_ctx_err_string(ctx));
+					throw std::runtime_error(path + std::string(": ") + jlog_ctx_err_string(ctx));
 				x->readerContext = ctx;
 
 				x->url = url;
