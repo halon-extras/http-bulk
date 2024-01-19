@@ -1,0 +1,19 @@
+{
+	"name": "http-bulk",
+	"dockerComposeFile": [
+		"docker-compose.yaml"
+	],
+	"workspaceFolder": "/http-bulk",
+	"service": "halon-smtpd",
+	"overrideCommand": false,
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"Halon.vscode-halon",
+				"Halon.hsl-linter",
+				"Halon.hsl-debug",
+				"ms-vscode.cpptools"
+			]
+		}
+	}
+}

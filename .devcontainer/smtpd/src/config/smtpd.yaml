@@ -1,0 +1,28 @@
+version: "5.8"
+servers:
+  - id: default
+    listeners:
+      - port: 25
+        address: 127.0.0.1
+environment:
+  uuid:
+    version: 4
+  controlsocket:
+    group: staff
+    chmod: "0660"
+  privdrop:
+    user: halon
+    group: halon
+  umask: "0027"
+  rlimit:
+    nofile: 70000
+plugins:
+  - id: http-bulk
+    config:
+      queues:
+        - id: elastic
+          path: /var/log/halon/elastic.jlog
+          format: ndjson
+          url: "https://1.2.3.4:9200/_bulk"
+          max_items: 500
+          tls_verify: false
