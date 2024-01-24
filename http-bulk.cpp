@@ -214,18 +214,30 @@ void subscriber(std::shared_ptr<bulkQueue> queue)
 			if (count > 0 && queue->maxInterval > 0)
 			{
 				queue->writeCV.wait_until(lk, lastSend + std::chrono::seconds(queue->maxInterval), [&queue] { return queue->writeNotify || queue->quit; });
+				if (queue->quit)
+					break;
 				if (queue->writeNotify)
 				{
 					queue->writeNotify = false;
+					// if we didn't see the next written item, we're probably at the end of a block file
+					// send what we have
+					int count2 = jlog_ctx_read_interval(queue->readerContext, &begin, &end);
+					if (count2 > 0 && count2 == count)
+						goto send;
 					continue;
 				}
-				if (queue->quit)
-					break;
 			}
 			else
 			{
 				queue->writeCV.wait(lk, [&queue] { return queue->writeNotify || queue->quit; });
 				queue->writeNotify = false;
+				if (queue->quit)
+					break;
+				// if we didn't see the next written item, we're probably at the end of a block file
+				// send what we have
+				int count2 = jlog_ctx_read_interval(queue->readerContext, &begin, &end);
+				if (count2 > 0 && count2 == count)
+					goto send;
 				continue;
 			}
 		}
