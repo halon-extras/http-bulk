@@ -11,6 +11,7 @@
 #include <unistd.h>
 #include <memory>
 #include <map>
+#include <atomic>
 
 enum format_t
 {
@@ -28,6 +29,12 @@ enum runstate_t
 
 struct bulkQueue
 {
+	std::atomic<size_t> http_requests_sent;
+	std::atomic<size_t> http_requests_failed;
+	std::atomic<size_t> http_item_sent;
+	bool http_working = false;
+	std::chrono::steady_clock::time_point http_last_request_ts;
+
 	std::mutex runMutex;
 	std::condition_variable runCV;
 	runstate_t runstate = RS_STARTED;
@@ -250,7 +257,8 @@ send:
 		if (queue->maxItems > 1 && queue->format == F_JSONARRAY)
 			payload += "[";
 
-		for (size_t items = 0; items < std::min(queue->maxItems, (size_t)count); items++, JLOG_ID_ADVANCE(&begin))
+		size_t items = 0;
+		for (; items < std::min(queue->maxItems, (size_t)count); items++, JLOG_ID_ADVANCE(&begin))
 		{
 			end = begin;
 			jlog_message m;
@@ -292,6 +300,11 @@ send:
 			curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0);
 		}
 
+		queue->runMutex.lock();
+		queue->http_working = true;
+		queue->http_last_request_ts = lastSend;
+		queue->runMutex.unlock();
+
 		curlQueueLock.lock();
 		curlQueue.push(curl);
 		curl_multi_wakeup(curlMultiHandle);
@@ -304,8 +317,12 @@ send:
 
 			if (h->status == 200)
 			{
+				queue->http_requests_sent += 1;
+				queue->http_item_sent += items;
+
 				queue->runMutex.lock();
 				queue->error.clear();
+				queue->http_working = false;
 				queue->runMutex.unlock();
 
 				jlog_ctx_read_checkpoint(queue->readerContext, &end);
@@ -313,7 +330,10 @@ send:
 			}
 			else
 			{
+				queue->http_requests_failed += 1;
+
 				queue->runMutex.lock();
+				queue->http_working = false;
 				queue->error = std::to_string(h->status) + " " + h->result;
 				queue->runMutex.unlock();
 
@@ -386,21 +406,31 @@ bool Halon_command_execute(HalonCommandExecuteContext* hcec, size_t argc, const 
 			return false;
 		}
 
+		std::string status;
+
 		h->second->runMutex.lock();
 		switch (h->second->runstate)
 		{
 			case RS_STARTED:
-				*out = strdup("Started");
+				status += "state: running\n";
 			break;
 			case RS_STOPPING:
-				*out = strdup("Stopping");
+				status += "state: stopping\n";
 			break;
 			case RS_STOPPED:
-				*out = strdup("Stopped");
+				status += "state: stopped\n";
 			break;
 		}
+		status += "status: " + std::string(h->second->http_working ?
+			("sending (" + std::to_string(std::chrono::duration<double>(std::chrono::steady_clock::now() - h->second->http_last_request_ts).count()) + "s)" ) :
+			"idle") + "\n";
+		if (!h->second->error.empty())
+			status += "error: " + h->second->error + "\n";
 		h->second->runMutex.unlock();
-
+		status += "requests-sent: " + std::to_string(h->second->http_requests_sent) + "\n";
+		status += "requests-failed: " + std::to_string(h->second->http_requests_failed) + "\n";
+		status += "item-sent: " + std::to_string(h->second->http_item_sent);
+		*out = strdup(status.c_str());
 		return true;
 	}
 	if (argc > 1 && strcmp(argv[0], "last-error") == 0)
