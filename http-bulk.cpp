@@ -62,7 +62,14 @@ struct bulkQueue
 	std::string error;
 };
 
+struct bulkQueueConcurrency
+{
+	size_t concurrency = 0;
+	size_t current = 0;
+};
+
 std::map<std::string, std::shared_ptr<bulkQueue>> bulkQueues;
+std::map<std::string, bulkQueueConcurrency> bulkQueuesConcurrency;
 
 bool curlQuit = false;
 std::thread curlThread;
@@ -161,7 +168,14 @@ void http_bulk(HalonHSLContext* hhc, HalonHSLArguments* args, HalonHSLValue* ret
 	size_t payloadlen = 0;
 	HalonMTA_hsl_value_get(payload_, HALONMTA_HSL_TYPE_STRING, &payload, &payloadlen);
 
-	auto x = bulkQueues.find(id);
+	auto bqc = bulkQueuesConcurrency.find(id);
+	if (bqc == bulkQueuesConcurrency.end())
+		return;
+	std::string idbq = id;
+	if (bqc->second.concurrency > 1 && (bqc->second.current % bqc->second.concurrency) != 0)
+		idbq += "." + std::to_string((bqc->second.current % bqc->second.concurrency) + 1);
+	++bqc->second.current;
+	auto x = bulkQueues.find(idbq);
 	if (x == bulkQueues.end())
 		return;
 
@@ -593,13 +607,11 @@ bool Halon_init(HalonInitContext* hic)
 			HalonConfig* queue;
 			while ((queue = HalonMTA_config_array_get(queues, l++)))
 			{
-				auto x = std::make_shared<bulkQueue>();
-
-				const char* id = HalonMTA_config_string_get(HalonMTA_config_object_get(queue, "id"), nullptr);
-				const char* path = HalonMTA_config_string_get(HalonMTA_config_object_get(queue, "path"), nullptr);
+				const char* id_ = HalonMTA_config_string_get(HalonMTA_config_object_get(queue, "id"), nullptr);
+				const char* path_ = HalonMTA_config_string_get(HalonMTA_config_object_get(queue, "path"), nullptr);
 				const char* url = HalonMTA_config_string_get(HalonMTA_config_object_get(queue, "url"), nullptr);
 
-				if (!id || !path || !url)
+				if (!id_ || !path_ || !url)
 					throw std::runtime_error("missing required property");
 
 				const char* format = HalonMTA_config_string_get(HalonMTA_config_object_get(queue, "format"), nullptr);
@@ -611,48 +623,70 @@ bool Halon_init(HalonInitContext* hic)
 				const char* postamble = HalonMTA_config_string_get(HalonMTA_config_object_get(queue, "postamble"), nullptr);
 
 				HalonConfig* headers = HalonMTA_config_object_get(queue, "headers");
-				if (headers)
-				{
-					size_t h = 0;
-					HalonConfig* header;
-					while ((header = HalonMTA_config_array_get(headers, h++)))
-						x->headers.push_back(HalonMTA_config_string_get(header, nullptr));
-				}
 
-				jlog_ctx* ctx = jlog_new(path);
-				if (jlog_ctx_init(ctx) != 0)
+				size_t concurrency = 1;
+				const char* concurrency_ = HalonMTA_config_string_get(HalonMTA_config_object_get(queue, "concurrency"), nullptr);
+				if (concurrency_)
+					concurrency = strtoul(concurrency_, nullptr, 10);
+
+				bulkQueuesConcurrency[id_] = { concurrency , 0 };
+
+				for (size_t i = 0; i < concurrency; ++i)
 				{
-					if (jlog_ctx_err(ctx) != JLOG_ERR_CREATE_EXISTS)
+					std::string id = id_;
+					std::string path = path_;
+
+					if (i > 0)
+					{
+						id = id_ + std::string(".") + std::to_string(i + 1);
+						path = path_ + std::string(".") + std::to_string(i + 1);
+					}
+
+					auto x = std::make_shared<bulkQueue>();
+
+					if (headers)
+					{
+						size_t h = 0;
+						HalonConfig* header;
+						while ((header = HalonMTA_config_array_get(headers, h++)))
+							x->headers.push_back(HalonMTA_config_string_get(header, nullptr));
+					}
+
+					jlog_ctx* ctx = jlog_new(path.c_str());
+					if (jlog_ctx_init(ctx) != 0)
+					{
+						if (jlog_ctx_err(ctx) != JLOG_ERR_CREATE_EXISTS)
+							throw std::runtime_error(path + std::string(": ") + jlog_ctx_err_string(ctx));
+						jlog_ctx_add_subscriber(ctx, "subscriber1", JLOG_BEGIN);
+					}
+					jlog_ctx_close(ctx);
+					ctx = jlog_new(path.c_str());
+					if (jlog_ctx_open_writer(ctx) != 0)
 						throw std::runtime_error(path + std::string(": ") + jlog_ctx_err_string(ctx));
+					x->writerContext = ctx;
+
+					ctx = jlog_new(path.c_str());
 					jlog_ctx_add_subscriber(ctx, "subscriber1", JLOG_BEGIN);
+					if (jlog_ctx_open_reader(ctx, "subscriber1") != 0)
+						throw std::runtime_error(path + std::string(": ") + jlog_ctx_err_string(ctx));
+					x->readerContext = ctx;
+
+					x->url = url;
+					x->format = !format || strcmp(format, "ndjson") == 0 ? F_NDJSON :
+								strcmp(format, "jsonarray") == 0 ? F_JSONARRAY : F_CUSTOM;
+					x->tls_verify = !tls_verify || strcmp(tls_verify, "true") == 0 ? true : false;
+					x->maxItems = !maxitems ? 1 : strtoul(maxitems, nullptr, 10);
+					x->minItems = !minitems ? 1 : strtoul(minitems, nullptr, 10);
+					x->maxInterval = !maxinterval ? 0 : strtoul(maxinterval, nullptr, 10);
+					x->preamble = preamble ? preamble : "";
+					x->postamble = postamble ? postamble : "";
+					x->subscriberThread = std::thread([x] {
+						pthread_setname_np(pthread_self(), "p/http-bulk/sub");
+						subscriber(x);
+					});
+
+					bulkQueues[id] = x;
 				}
-				jlog_ctx_close(ctx);
-				ctx = jlog_new(path);
-				if (jlog_ctx_open_writer(ctx) != 0)
-					throw std::runtime_error(path + std::string(": ") + jlog_ctx_err_string(ctx));
-				x->writerContext = ctx;
-
-				ctx = jlog_new(path);
-				jlog_ctx_add_subscriber(ctx, "subscriber1", JLOG_BEGIN);
-				if (jlog_ctx_open_reader(ctx, "subscriber1") != 0)
-					throw std::runtime_error(path + std::string(": ") + jlog_ctx_err_string(ctx));
-				x->readerContext = ctx;
-
-				x->url = url;
-				x->format = !format || strcmp(format, "ndjson") == 0 ? F_NDJSON :
-							strcmp(format, "jsonarray") == 0 ? F_JSONARRAY : F_CUSTOM;
-				x->tls_verify = !tls_verify || strcmp(tls_verify, "true") == 0 ? true : false;
-				x->maxItems = !maxitems ? 1 : strtoul(maxitems, nullptr, 10);
-				x->minItems = !minitems ? 1 : strtoul(minitems, nullptr, 10);
-				x->maxInterval = !maxinterval ? 0 : strtoul(maxinterval, nullptr, 10);
-				x->preamble = preamble ? preamble : "";
-				x->postamble = postamble ? postamble : "";
-				x->subscriberThread = std::thread([x] {
-					pthread_setname_np(pthread_self(), "p/http-bulk/sub");
-					subscriber(x);
-				});
-
-				bulkQueues[id] = x;
 			}
 		}
 	} catch (const std::runtime_error& e) {

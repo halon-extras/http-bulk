@@ -53,7 +53,16 @@ For the configuration schema, see [http-bulk.schema.json](http-bulk.schema.json)
 > mkdir /var/log/halon
 > chown halon:staff /var/log/halon
 > ```
+
+> **_Important!_**
 > 
+> If concurrency is higher than ``1`` multiple subqueues will be created for each queue starting with ``.2``.
+> When injecting items (using ``http_bulk``) you can only use the primary queue id (without ``.X``) and the items will be distributed within subqueue using round-robin.
+> However when using the plugin commands you need to specify which subqueue the action should be taken on. 
+> ```
+> halonctl plugin command http-bulk status elastic
+> halonctl plugin command http-bulk status elastic.2
+> ```
 
 ### smtpd.yaml
 
@@ -63,12 +72,14 @@ plugins:
     config:
       queues:
         - id: elastic
+          concurrency: 1
           path: /var/log/halon/elastic.jlog
           format: ndjson
           url: "https://1.2.3.4:9200/_bulk"
           max_items: 500
           tls_verify: false
         - id: custom-ndjson
+          concurrency: 1
           path: /var/log/halon/custom-ndjson.jlog
           format: "ndjson"
           url: "http://1.2.3.4:8080/ndjson"
@@ -79,6 +90,7 @@ plugins:
           headers:
             - "Authorization: Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ=="
         - id: custom-csv
+          concurrency: 1
           path: /var/log/halon/custom-csv.jlog
           format: "custom"
           url: "http://1.2.3.4:8080/csv"
