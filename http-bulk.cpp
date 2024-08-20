@@ -58,6 +58,9 @@ struct bulkQueue
 	format_t format = F_JSONARRAY;
 	bool tls_verify = true;
 	std::vector<std::string> headers;
+	std::string username;
+	std::string password;
+	std::string aws_sigv4;
 
 	std::string error;
 };
@@ -299,6 +302,13 @@ send:
 		curl_easy_setopt(curl, CURLOPT_URL, queue->url.c_str());
 		curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "POST");
 		curl_easy_setopt(curl, CURLOPT_PRIVATE, (void*)h);
+
+		if (!queue->username.empty())
+			curl_easy_setopt(curl, CURLOPT_USERNAME, queue->username.c_str());
+		if (!queue->password.empty())
+			curl_easy_setopt(curl, CURLOPT_PASSWORD, queue->password.c_str());
+		if (!queue->aws_sigv4.empty())
+			curl_easy_setopt(curl, CURLOPT_AWS_SIGV4, queue->aws_sigv4.c_str());
 
 		curl_easy_setopt(curl, CURLOPT_POSTFIELDS, payload.c_str());
 		curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, payload.size());
@@ -621,6 +631,9 @@ bool Halon_init(HalonInitContext* hic)
 				const char* tls_verify = HalonMTA_config_string_get(HalonMTA_config_object_get(queue, "tls_verify"), nullptr);
 				const char* preamble = HalonMTA_config_string_get(HalonMTA_config_object_get(queue, "preamble"), nullptr);
 				const char* postamble = HalonMTA_config_string_get(HalonMTA_config_object_get(queue, "postamble"), nullptr);
+				const char* username = HalonMTA_config_string_get(HalonMTA_config_object_get(queue, "username"), nullptr);
+				const char* password = HalonMTA_config_string_get(HalonMTA_config_object_get(queue, "password"), nullptr);
+				const char* aws_sigv4 = HalonMTA_config_string_get(HalonMTA_config_object_get(queue, "aws_sigv4"), nullptr);
 
 				HalonConfig* headers = HalonMTA_config_object_get(queue, "headers");
 
@@ -680,6 +693,9 @@ bool Halon_init(HalonInitContext* hic)
 					x->maxInterval = !maxinterval ? 0 : strtoul(maxinterval, nullptr, 10);
 					x->preamble = preamble ? preamble : "";
 					x->postamble = postamble ? postamble : "";
+					x->username = username ? username : "";
+					x->password = password ? password : "";
+					x->aws_sigv4 = aws_sigv4 ? aws_sigv4 : "";
 					x->subscriberThread = std::thread([x] {
 						pthread_setname_np(pthread_self(), "p/http-bulk/sub");
 						subscriber(x);

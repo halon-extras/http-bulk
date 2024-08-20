@@ -78,6 +78,15 @@ plugins:
           url: "https://1.2.3.4:9200/_bulk"
           max_items: 500
           tls_verify: false
+        - id: opensearch
+          concurrency: 1
+          path: /var/log/halon/elastic.jlog
+          format: ndjson
+          url: "https://1.2.3.4:9200/_bulk"
+          max_items: 500
+          username: secret
+          password: secret
+          aws_sigv4: aws:amz:us-east-1:es
         - id: custom-ndjson
           concurrency: 1
           path: /var/log/halon/custom-ndjson.jlog

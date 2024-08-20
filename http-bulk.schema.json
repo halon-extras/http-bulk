@@ -63,6 +63,18 @@
                         "type": "string",
                         "description": "Postamble to add before the data (for each request)"
                     },
+                    "username": {
+                        "type": "string",
+                        "description": "HTTP authentication username"
+                    },
+                    "password": {
+                        "type": "string",
+                        "description": "HTTP authentication password"
+                    },
+                    "aws_sigv4": {
+                        "type": "string",
+                        "description": "AWS SIGv4 option (see CURLOPT_AWS_SIGV4)"
+                    },
                     "headers": {
                         "type": "array",
                         "description": "Additional HTTP headers",
