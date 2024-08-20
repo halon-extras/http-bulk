@@ -13,6 +13,11 @@
 #include <map>
 #include <atomic>
 
+// Halon > 6.1 is linked against libcurl with this feature
+#ifndef CURLOPT_AWS_SIGV4
+#define CURLOPT_AWS_SIGV4 (CURLoption)(CURLOPTTYPE_STRINGPOINT + 305)
+#endif
+
 enum format_t
 {
 	F_NDJSON,
