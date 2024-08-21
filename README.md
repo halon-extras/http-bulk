@@ -86,7 +86,9 @@ plugins:
           max_items: 500
           username: secret
           password: secret
-          aws_sigv4: aws:amz:us-east-1:es
+          aws_sigv4: aws:amz:us-east-1:aoss
+          headers:
+            - "x-amz-content-sha256: UNSIGNED-PAYLOAD"
         - id: custom-ndjson
           concurrency: 1
           path: /var/log/halon/custom-ndjson.jlog
