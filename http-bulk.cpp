@@ -307,6 +307,7 @@ send:
 		curl_easy_setopt(curl, CURLOPT_URL, queue->url.c_str());
 		curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "POST");
 		curl_easy_setopt(curl, CURLOPT_PRIVATE, (void*)h);
+		curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1);
 
 		if (!queue->username.empty())
 			curl_easy_setopt(curl, CURLOPT_USERNAME, queue->username.c_str());
