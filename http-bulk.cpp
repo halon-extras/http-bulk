@@ -12,6 +12,7 @@
 #include <memory>
 #include <map>
 #include <atomic>
+#include <stdexcept>
 
 // Halon > 6.1 is linked against libcurl with this feature
 #ifndef CURLOPT_AWS_SIGV4
