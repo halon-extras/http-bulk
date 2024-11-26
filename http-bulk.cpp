@@ -346,7 +346,7 @@ send:
 			std::unique_lock<std::mutex> lck(h->mtx);
 			h->cv.wait(lck, [h] { return h->cvv == true; });
 
-			if (h->status == 200)
+			if (h->status / 100 == 2)
 			{
 				queue->http_requests_sent += 1;
 				queue->http_item_sent += items;
