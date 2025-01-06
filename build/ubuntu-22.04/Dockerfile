@@ -17,8 +17,8 @@ RUN apt-get update && apt-get install -y halon=6.0.3
 RUN apt-get install -y build-essential cmake curl autoconf file
 RUN mkdir /tmp/halon
 RUN cd /tmp/halon \
-    && curl -O -L https://github.com/omniti-labs/jlog/archive/refs/tags/2.5.3.tar.gz \
-    && tar -zxvf 2.5.3.tar.gz && cd jlog-2.5.3 \
+    && curl -O -L https://github.com/omniti-labs/jlog/archive/refs/tags/2.6.0.tar.gz \
+    && tar -zxvf 2.6.0.tar.gz && cd jlog-2.6.0 \
     && autoconf && CFLAGS=-fPIC ./configure && make && make install \
     && mkdir -p /jlog && cp LICENSE /jlog/LICENSE
 RUN rm -rf /tmp/halon

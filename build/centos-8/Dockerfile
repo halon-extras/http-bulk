@@ -24,8 +24,8 @@ RUN cd /tmp/halon \
     && cp /usr/local/lib/pkgconfig/libcurl.pc /usr/lib64/pkgconfig/ \
     && rm /usr/local/bin/curl
 RUN cd /tmp/halon \
-    && curl -O -L https://github.com/omniti-labs/jlog/archive/refs/tags/2.5.3.tar.gz \
-    && tar -zxvf 2.5.3.tar.gz && cd jlog-2.5.3 \
+    && curl -O -L https://github.com/omniti-labs/jlog/archive/refs/tags/2.6.0.tar.gz \
+    && tar -zxvf 2.6.0.tar.gz && cd jlog-2.6.0 \
     && autoconf && CFLAGS=-fPIC ./configure && make && make install \
     && mkdir -p /jlog && cp LICENSE /jlog/LICENSE
 RUN rm -rf /tmp/halon
