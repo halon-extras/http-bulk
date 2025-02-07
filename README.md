@@ -115,6 +115,18 @@ plugins:
             - "Authorization: Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ=="
 ```
 
+### Operation of `min_items`, `max_items` and `interval`
+
+During busy periods, when there are many queued events, batches of size `max_items` will be sent.
+
+During quiet periods, to avoid excessive queue latency, the `min_items` and `interval` values are used together.
+
+The plugin will wait for events to arrive:
+* for _up to_ `interval` seconds, or
+* when `min_items` is reached (whichever happens soonest).
+
+A `min_items` value of 1 effectively means "send immediately when we have just one event". For efficient batching, set 1 > `min_items` >= `max_items`.
+
 ## Example
 
 ```
