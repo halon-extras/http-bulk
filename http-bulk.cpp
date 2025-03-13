@@ -77,15 +77,15 @@ struct bulkQueueConcurrency
 	size_t current = 0;
 };
 
-std::map<std::string, std::shared_ptr<bulkQueue>> bulkQueues;
-std::map<std::string, bulkQueueConcurrency> bulkQueuesConcurrency;
+static std::map<std::string, std::shared_ptr<bulkQueue>> bulkQueues;
+static std::map<std::string, bulkQueueConcurrency> bulkQueuesConcurrency;
 
-bool curlQuit = false;
-std::thread curlThread;
-CURLM *curlMultiHandle = NULL;
+static bool curlQuit = false;
+static std::thread curlThread;
+static CURLM *curlMultiHandle = NULL;
 
-std::mutex curlQueueLock;
-std::queue<CURL*> curlQueue;
+static std::mutex curlQueueLock;
+static std::queue<CURL*> curlQueue;
 
 struct curlResult {
 	std::mutex mtx;
@@ -95,7 +95,7 @@ struct curlResult {
 	std::string result;
 };
 
-void curl_multi()
+static void curl_multi()
 {
 	pthread_setname_np(pthread_self(), "p/http-bulk/req");
 	do {
@@ -147,7 +147,7 @@ void curl_multi()
 	} while (!curlQuit);
 }
 
-size_t write_callback(char *data, size_t size, size_t nmemb, std::string* writerData)
+static size_t write_callback(char *data, size_t size, size_t nmemb, std::string* writerData)
 {
 	if (writerData == NULL)
 		return 0;
@@ -161,8 +161,7 @@ int Halon_version()
 	return HALONMTA_PLUGIN_VERSION;
 }
 
-HALON_EXPORT
-void http_bulk(HalonHSLContext* hhc, HalonHSLArguments* args, HalonHSLValue* ret)
+static void http_bulk(HalonHSLContext* hhc, HalonHSLArguments* args, HalonHSLValue* ret)
 {
 	HalonHSLValue* id_ = HalonMTA_hsl_argument_get(args, 0);
 	if (!id_ || HalonMTA_hsl_value_type(id_) != HALONMTA_HSL_TYPE_STRING)
@@ -205,7 +204,7 @@ void http_bulk(HalonHSLContext* hhc, HalonHSLArguments* args, HalonHSLValue* ret
 	return;
 }
 
-void subscriber(std::shared_ptr<bulkQueue> queue)
+static void subscriber(std::shared_ptr<bulkQueue> queue)
 {
 	size_t failures = 0;
 	auto lastSend = std::chrono::steady_clock::now();
