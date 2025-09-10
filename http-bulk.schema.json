@@ -83,7 +83,7 @@
                     "connect_timeout": {
                         "type": "number",
                         "description": "Maximum time to wait for a connect attempt in seconds",
-                        "default": 0
+                        "default": 300
                     },
                     "headers": {
                         "type": "array",
