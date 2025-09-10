@@ -75,6 +75,16 @@
                         "type": "string",
                         "description": "AWS SIGv4 option (see CURLOPT_AWS_SIGV4)"
                     },
+                    "timeout": {
+                        "type": "number",
+                        "description": "Maximum time to wait for a request in seconds",
+                        "default": 0
+                    },
+                    "connect_timeout": {
+                        "type": "number",
+                        "description": "Maximum time to wait for a connect attempt in seconds",
+                        "default": 0
+                    },
                     "headers": {
                         "type": "array",
                         "description": "Additional HTTP headers",

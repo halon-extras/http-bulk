@@ -76,6 +76,7 @@ plugins:
           path: /var/log/halon/elastic.jlog
           format: ndjson
           url: "https://1.2.3.4:9200/_bulk"
+          timeout: 30
           max_items: 500
           tls_verify: false
         - id: opensearch
@@ -83,6 +84,7 @@ plugins:
           path: /var/log/halon/elastic.jlog
           format: ndjson
           url: "https://1.2.3.4:9200/_bulk"
+          timeout: 30
           max_items: 500
           username: secret
           password: secret
@@ -94,6 +96,7 @@ plugins:
           path: /var/log/halon/custom-ndjson.jlog
           format: "ndjson"
           url: "http://1.2.3.4:8080/ndjson"
+          timeout: 30
           max_items: 1000
           min_items: 1000
           max_interval: 60
@@ -105,6 +108,7 @@ plugins:
           path: /var/log/halon/custom-csv.jlog
           format: "custom"
           url: "http://1.2.3.4:8080/csv"
+          timeout: 30
           max_items: 1000
           min_items: 1000
           max_interval: 60

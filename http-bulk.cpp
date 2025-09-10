@@ -67,6 +67,8 @@ struct bulkQueue
 	std::string username;
 	std::string password;
 	std::string aws_sigv4;
+	size_t timeout = 0;
+	size_t connect_timeout = 0;
 
 	std::string error;
 };
@@ -315,6 +317,10 @@ send:
 			curl_easy_setopt(curl, CURLOPT_PASSWORD, queue->password.c_str());
 		if (!queue->aws_sigv4.empty())
 			curl_easy_setopt(curl, CURLOPT_AWS_SIGV4, queue->aws_sigv4.c_str());
+		if (queue->timeout)
+			curl_easy_setopt(curl, CURLOPT_TIMEOUT, queue->timeout);
+		if (queue->connect_timeout)
+			curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, queue->connect_timeout);
 
 		curl_easy_setopt(curl, CURLOPT_POSTFIELDS, payload.c_str());
 		curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, payload.size());
@@ -640,6 +646,8 @@ bool Halon_init(HalonInitContext* hic)
 				const char* username = HalonMTA_config_string_get(HalonMTA_config_object_get(queue, "username"), nullptr);
 				const char* password = HalonMTA_config_string_get(HalonMTA_config_object_get(queue, "password"), nullptr);
 				const char* aws_sigv4 = HalonMTA_config_string_get(HalonMTA_config_object_get(queue, "aws_sigv4"), nullptr);
+				const char* timeout = HalonMTA_config_string_get(HalonMTA_config_object_get(queue, "timeout"), nullptr);
+				const char* connect_timeout = HalonMTA_config_string_get(HalonMTA_config_object_get(queue, "connect_timeout"), nullptr);
 
 				HalonConfig* headers = HalonMTA_config_object_get(queue, "headers");
 
@@ -702,6 +710,8 @@ bool Halon_init(HalonInitContext* hic)
 					x->username = username ? username : "";
 					x->password = password ? password : "";
 					x->aws_sigv4 = aws_sigv4 ? aws_sigv4 : "";
+					x->connect_timeout = !connect_timeout ? 0 : strtoul(connect_timeout, nullptr, 10);
+					x->timeout = !timeout ? 0 : strtoul(timeout, nullptr, 10);
 					x->subscriberThread = std::thread([x] {
 						pthread_setname_np(pthread_self(), "p/http-bulk/sub");
 						subscriber(x);
