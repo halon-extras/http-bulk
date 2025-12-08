@@ -67,6 +67,8 @@ INSTALL(FILES "${CMAKE_CURRENT_BINARY_DIR}/http-bulk.so.link" DESTINATION plugin
 INSTALL(FILES "LICENSE" DESTINATION share/doc/plugins/http-bulk)
 INSTALL(FILES "/jlog/LICENSE" DESTINATION share/doc/plugins/http-bulk RENAME LICENSE.jlog)
 
+INSTALL(FILES "sbom.json" DESTINATION share/sbom/plugins RENAME ${PROJECT_NAME}.json)
+
 SET(CMAKE_INSTALL_PREFIX "/opt/halon")
 SET(CPACK_PACKAGING_INSTALL_PREFIX "/opt/halon")
 
