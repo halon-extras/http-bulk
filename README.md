@@ -124,7 +124,7 @@ plugins:
           jsontemplate: |
             {
               "workflowType": { "name": "handleHalonEmails" },
-              "taskQueue": { "name": "lbx-live-halon-workflows", "kind": "TASK_QUEUE_KIND_NORMAL" },
+              "taskQueue": { "name": "halon-workflows", "kind": "TASK_QUEUE_KIND_NORMAL" },
               "identity": "halon-http-bulk",
               "requestId": $UUIDV7,
               "workflowTaskTimeout": "10s",
@@ -137,7 +137,7 @@ plugins:
                 ]
               }
             }
-          url: "http://1.2.3.4:7233/api/v1/namespaces/default/workflows"
+          url: "http://1.2.3.4:7233/api/v1/namespaces/default/workflows/halon-http-bulk"
           timeout: 30
           max_items: 500
           tls_verify: true
