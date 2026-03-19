@@ -117,7 +117,38 @@ plugins:
           headers:
             - "Content-Type: text/csv"
             - "Authorization: Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ=="
+        - id: temporal
+          concurrency: 1
+          path: /var/log/halon/temporal.jlog
+          format: jsonarray
+          jsontemplate: |
+            {
+              "workflowType": { "name": "handleHalonEmails" },
+              "taskQueue": { "name": "lbx-live-halon-workflows", "kind": "TASK_QUEUE_KIND_NORMAL" },
+              "identity": "halon-http-bulk",
+              "requestId": $UUIDV7,
+              "workflowTaskTimeout": "10s",
+              "input": {
+                "payloads": [
+                  {
+                    "metadata": { "encoding": "anNvbi9wbGFpbg==" },
+                    "data": $DATA_BASE64
+                  }
+                ]
+              }
+            }
+          url: "http://1.2.3.4:7233/api/v1/namespaces/default/workflows"
+          timeout: 30
+          max_items: 500
+          tls_verify: true
+          headers:
+            - "Authorization: Bearer secret"
 ```
+
+When `jsontemplate` is set, the request body is rendered as JSON and the following raw template tags are supported:
+
+* `$UUIDV7` inserts a generated UUIDv7 JSON string.
+* `$DATA_BASE64` inserts a base64-encoded JSON string of the current batch rendered as a canonical JSON array.
 
 ### Operation of `min_items`, `max_items` and `interval`
 
