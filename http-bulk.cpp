@@ -59,6 +59,7 @@ struct bulkQueue
 	size_t maxItems = 1;
 	size_t maxInterval = 0;
 
+	std::string id;
 	std::string url;
 	std::string preamble, postamble;
 	format_t format = F_JSONARRAY;
@@ -288,7 +289,7 @@ send:
 			jlog_message m;
 			if (jlog_ctx_read_message(queue->readerContext, &begin, &m) != 0)
 			{
-				syslog(LOG_CRIT, "http_bulk: jlog_ctx_read_message failed: %d %s", jlog_ctx_err(queue->readerContext), jlog_ctx_err_string(queue->readerContext));
+				syslog(LOG_CRIT, "http_bulk(%s): jlog_ctx_read_message failed: %d %s", queue->id.c_str(), jlog_ctx_err(queue->readerContext), jlog_ctx_err_string(queue->readerContext));
 				return;
 			}
 			if (queue->maxItems > 1 && items != 0 && queue->format == F_JSONARRAY)
@@ -375,9 +376,9 @@ send:
 
 				++failures;
 				if (failures == 1)
-					syslog(LOG_CRIT, "http_bulk: failed to send request to %s: %zd %s", queue->url.c_str(), h->status, h->result.c_str());
+					syslog(LOG_CRIT, "http_bulk(%s): failed to send request to %s: %zd %s", queue->id.c_str(), queue->url.c_str(), h->status, h->result.c_str());
 				if (failures > 30)
-					syslog(LOG_CRIT, "http_bulk: still unable to send request to %s: %zd %s", queue->url.c_str(), h->status, h->result.c_str());
+					syslog(LOG_CRIT, "http_bulk(%s): still unable to send request to %s: %zd %s", queue->id.c_str(), queue->url.c_str(), h->status, h->result.c_str());
 				sleep(1);
 			}
 		}
@@ -670,6 +671,7 @@ bool Halon_init(HalonInitContext* hic)
 					}
 
 					auto x = std::make_shared<bulkQueue>();
+					x->id = id;
 
 					if (headers)
 					{
