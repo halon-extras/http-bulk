@@ -28,6 +28,7 @@ SET(CMAKE_CXX_FLAGS_RELEASE "-std=c++17 -Wall -Wvla -Wshadow -Wconversion -Wno-s
 
 ADD_LIBRARY(http-bulk SHARED
 	http-bulk.cpp
+	http-bulk-payload.cpp
 )
 
 TARGET_LINK_LIBRARIES(http-bulk
@@ -36,6 +37,15 @@ TARGET_LINK_LIBRARIES(http-bulk
 )
 
 SET_TARGET_PROPERTIES(http-bulk PROPERTIES PREFIX "")
+
+ENABLE_TESTING()
+
+ADD_EXECUTABLE(http-bulk-payload-test
+	http-bulk-payload.cpp
+	tests/http-bulk-payload-test.cpp
+)
+
+ADD_TEST(NAME http-bulk-payload-test COMMAND http-bulk-payload-test)
 
 INCLUDE_DIRECTORIES(
 	/opt/halon/include
