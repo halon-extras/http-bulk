@@ -28,20 +28,21 @@ ELSE()
 ENDIF()
 
 SET(CMAKE_BUILD_TYPE Release)
-SET(CMAKE_CXX_FLAGS_RELEASE "-std=c++17 -Wall -Wvla -Wshadow -Wconversion -Wno-sign-conversion -Wno-c++11-narrowing -O2 -fno-strict-aliasing -Wextra -Wno-unused-parameter")
+SET(CMAKE_CXX_FLAGS_RELEASE "-std=c++17 -Wall -fPIC -Wvla -Wshadow -Wconversion -Wno-sign-conversion -Wno-c++11-narrowing -O2 -fno-strict-aliasing -Wextra -Wno-unused-parameter")
 
 ADD_LIBRARY(http-bulk SHARED
 	http-bulk.cpp
 )
 
 TARGET_LINK_LIBRARIES(http-bulk
-	curl
+	/usr/local/lib/libcurl.so
 	/usr/local/lib/libjlog.a
 )
 
 SET_TARGET_PROPERTIES(http-bulk PROPERTIES PREFIX "")
 
 INCLUDE_DIRECTORIES(
+	/usr/local/include
 	/opt/halon/include
 )
 
