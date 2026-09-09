@@ -17,13 +17,13 @@ RUN echo "deb [arch=${TARGETARCH} signed-by=/usr/share/keyrings/halon-archive-ke
 RUN echo "machine repo.halon.io login ${HALON_REPO_USER} password ${HALON_REPO_PASS}" >> /etc/apt/auth.conf
 RUN apt-get update && apt-get install -y halon-smtpd=6.11.0
 
-RUN apt-get install -y build-essential cmake curl autoconf file
+RUN apt-get install -y build-essential cmake curl autoconf file libarchive-tools
 RUN mkdir /tmp/halon
 RUN cd /tmp/halon \
     && curl -O -L https://github.com/omniti-labs/jlog/archive/refs/tags/2.6.0.tar.gz \
     && echo "c3c6e745557f789c2cef3e3760e3c68ee585727a0d55c14ad9cb3e8232f4e46b 2.6.0.tar.gz" | sha256sum -c \
-    && tar -zxvf 2.6.0.tar.gz && cd jlog-2.6.0 \
-    && autoconf && CFLAGS=-fPIC ./configure && make && make install \
+    && LC_ALL=C.UTF-8 LANG=C.UTF-8 bsdtar -zxvf 2.6.0.tar.gz && cd jlog-2.6.0 \
+    && autoconf && CFLAGS="-fPIC -Wno-error=discarded-qualifiers" ./configure && make && make install \
     && mkdir -p /jlog && cp LICENSE /jlog/LICENSE
 RUN rm -rf /tmp/halon
 RUN echo -n "UBU2604" > /OSRELEASE.txt
