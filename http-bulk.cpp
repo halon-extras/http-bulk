@@ -13,6 +13,9 @@
 #include <map>
 #include <atomic>
 #include <stdexcept>
+#include <vector>
+
+#include "http-bulk-payload.h"
 
 // Halon > 6.1 is linked against libcurl with this feature
 #ifndef CURLOPT_AWS_SIGV4
@@ -62,6 +65,7 @@ struct bulkQueue
 	std::string id;
 	std::string url;
 	std::string preamble, postamble;
+	std::string jsonTemplate;
 	format_t format = F_JSONARRAY;
 	bool tls_verify = true;
 	std::vector<std::string> headers;
@@ -97,6 +101,20 @@ struct curlResult {
 	long status;
 	std::string result;
 };
+
+static http_bulk::payload_format to_payload_format(format_t format)
+{
+	switch (format)
+	{
+		case F_NDJSON:
+			return http_bulk::payload_format::ndjson;
+		case F_JSONARRAY:
+			return http_bulk::payload_format::jsonarray;
+		case F_CUSTOM:
+			return http_bulk::payload_format::custom;
+	}
+	return http_bulk::payload_format::custom;
+}
 
 static void curl_multi()
 {
@@ -213,17 +231,24 @@ static void subscriber(std::shared_ptr<bulkQueue> queue)
 	auto lastSend = std::chrono::steady_clock::now();
 
 	struct curl_slist* hdrs = nullptr;
-	switch (queue->format)
+	if (!queue->jsonTemplate.empty())
 	{
-		case F_NDJSON:
-			hdrs = curl_slist_append(hdrs, "Content-Type: application/x-ndjson");
-		break;
-		case F_JSONARRAY:
-			hdrs = curl_slist_append(hdrs, "Content-Type: application/json");
-		break;
-		case F_CUSTOM:
-			/* no header */
-		break;
+		hdrs = curl_slist_append(hdrs, "Content-Type: application/json");
+	}
+	else
+	{
+		switch (queue->format)
+		{
+			case F_NDJSON:
+				hdrs = curl_slist_append(hdrs, "Content-Type: application/x-ndjson");
+			break;
+			case F_JSONARRAY:
+				hdrs = curl_slist_append(hdrs, "Content-Type: application/json");
+			break;
+			case F_CUSTOM:
+				/* no header */
+			break;
+		}
 	}
 	for (const auto & i : queue->headers)
 		hdrs = curl_slist_append(hdrs, i.c_str());
@@ -276,11 +301,7 @@ static void subscriber(std::shared_ptr<bulkQueue> queue)
 
 send:
 		lastSend = std::chrono::steady_clock::now();
-
-		std::string payload = queue->preamble;
-
-		if (queue->maxItems > 1 && queue->format == F_JSONARRAY)
-			payload += "[";
+		std::vector<std::string> payloadItems;
 
 		size_t items = 0;
 		for (; items < std::min(queue->maxItems, (size_t)count); items++, JLOG_ID_ADVANCE(&begin))
@@ -292,17 +313,17 @@ send:
 				syslog(LOG_CRIT, "http_bulk(%s): jlog_ctx_read_message failed: %d %s", queue->id.c_str(), jlog_ctx_err(queue->readerContext), jlog_ctx_err_string(queue->readerContext));
 				return;
 			}
-			if (queue->maxItems > 1 && items != 0 && queue->format == F_JSONARRAY)
-				payload += ",";
-			payload += std::string((char*)m.mess, m.mess_len);
-			if (queue->format == F_NDJSON)
-				payload += "\n";
+			payloadItems.emplace_back((char*)m.mess, m.mess_len);
 			if (queue->oneItem)
 				break;
 		}
-		if (queue->maxItems > 1 && queue->format == F_JSONARRAY)
-			payload += "]";
-		payload += queue->postamble;
+		std::string payload = http_bulk::render_payload(
+			to_payload_format(queue->format),
+			payloadItems,
+			queue->maxItems > 1,
+			queue->preamble,
+			queue->postamble,
+			queue->jsonTemplate);
 
 		auto h = new curlResult;
 
@@ -644,6 +665,7 @@ bool Halon_init(HalonInitContext* hic)
 				const char* tls_verify = HalonMTA_config_string_get(HalonMTA_config_object_get(queue, "tls_verify"), nullptr);
 				const char* preamble = HalonMTA_config_string_get(HalonMTA_config_object_get(queue, "preamble"), nullptr);
 				const char* postamble = HalonMTA_config_string_get(HalonMTA_config_object_get(queue, "postamble"), nullptr);
+				const char* jsontemplate = HalonMTA_config_string_get(HalonMTA_config_object_get(queue, "jsontemplate"), nullptr);
 				const char* username = HalonMTA_config_string_get(HalonMTA_config_object_get(queue, "username"), nullptr);
 				const char* password = HalonMTA_config_string_get(HalonMTA_config_object_get(queue, "password"), nullptr);
 				const char* aws_sigv4 = HalonMTA_config_string_get(HalonMTA_config_object_get(queue, "aws_sigv4"), nullptr);
@@ -709,6 +731,7 @@ bool Halon_init(HalonInitContext* hic)
 					x->maxInterval = !maxinterval ? 0 : strtoul(maxinterval, nullptr, 10);
 					x->preamble = preamble ? preamble : "";
 					x->postamble = postamble ? postamble : "";
+					x->jsonTemplate = jsontemplate ? jsontemplate : "";
 					x->username = username ? username : "";
 					x->password = password ? password : "";
 					x->aws_sigv4 = aws_sigv4 ? aws_sigv4 : "";

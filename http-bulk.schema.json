@@ -35,6 +35,10 @@
                         "default": "jsonarray",
                         "description": "JSON bulk format"
                     },
+                    "jsontemplate": {
+                        "type": "string",
+                        "description": "JSON request template. Supports raw tags $UUIDV7 and $DATA_BASE64"
+                    },
                     "min_items": {
                         "type": "number",
                         "description": "Minimum items to send in bulk request",
