@@ -35,9 +35,9 @@ enum runstate_t
 
 struct bulkQueue
 {
-	std::atomic<size_t> http_requests_sent;
-	std::atomic<size_t> http_requests_failed;
-	std::atomic<size_t> http_item_sent;
+	std::atomic<size_t> http_requests_sent{0};
+	std::atomic<size_t> http_requests_failed{0};
+	std::atomic<size_t> http_item_sent{0};
 	bool http_working = false;
 	std::chrono::steady_clock::time_point http_last_request_ts;
 
@@ -286,7 +286,8 @@ send:
 			payload += "[";
 
 		size_t items = 0;
-		for (; items < std::min(queue->maxItems, (size_t)count); items++, JLOG_ID_ADVANCE(&begin))
+		size_t limit = std::min(queue->oneItem ? (size_t)1 : queue->maxItems, (size_t)count);
+		for (; items < limit; items++, JLOG_ID_ADVANCE(&begin))
 		{
 			end = begin;
 			jlog_message m;
@@ -300,8 +301,6 @@ send:
 			payload += std::string((char*)m.mess, m.mess_len);
 			if (queue->format == F_NDJSON)
 				payload += "\n";
-			if (queue->oneItem)
-				break;
 		}
 		if (queue->maxItems > 1 && queue->format == F_JSONARRAY)
 			payload += "]";
