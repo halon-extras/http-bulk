@@ -747,7 +747,12 @@ void Halon_cleanup()
 {
 	for (auto & i : bulkQueues)
 	{
-		i.second->quit = true;
+		{
+			// set quit under both condition variables' mutexes, so the subscriber
+			// can't check its wait predicate and then miss the notification below
+			std::scoped_lock lk(i.second->runMutex, i.second->writerMutex);
+			i.second->quit = true;
+		}
 		i.second->writeCV.notify_all();
 		i.second->runCV.notify_one();
 		i.second->subscriberThread.join();
