@@ -20,12 +20,12 @@ yum install halon-extras-http-bulk
 
 ## Commands
 
-This plugin can be controlled using the ``halonctl`` tool. The following commands are available though ``halonctl plugin command http-bulk ...``.
+This plugin can be controlled using the ``halonctl`` tool. The following commands are available through ``halonctl plugin command http-bulk ...``.
 
 | Command | |
 |------|------|
 | start \<queue> | Resume the queue if stopped |
-| start-one \<queue> | Resume the queue if stopped, with maxItems = 1, useful for debugging |
+| start-one \<queue> | Resume the queue if stopped, with `max_items` = 1, useful for debugging |
 | stop \<queue> | Stop the queue |
 | status \<queue> | Show the current status of the queue |
 | count \<queue> | Show items in queue |
@@ -57,7 +57,7 @@ For the configuration schema, see [http-bulk.schema.json](http-bulk.schema.json)
 > **_Important!_**
 > 
 > If concurrency is higher than ``1`` multiple subqueues will be created for each queue starting with ``.2``.
-> When injecting items (using ``http_bulk``) you can only use the primary queue id (without ``.X``) and the items will be distributed within subqueue using round-robin.
+> When injecting items (using ``http_bulk``) you can only use the primary queue id (without ``.X``) and the items will be distributed across the subqueues using round-robin.
 > However when using the plugin commands you need to specify which subqueue the action should be taken on. 
 > ```
 > halonctl plugin command http-bulk status elastic
@@ -81,7 +81,7 @@ plugins:
           tls_verify: false
         - id: opensearch
           concurrency: 1
-          path: /var/log/halon/elastic.jlog
+          path: /var/log/halon/opensearch.jlog
           format: ndjson
           url: "https://1.2.3.4:9200/_bulk"
           timeout: 30
@@ -119,17 +119,17 @@ plugins:
             - "Authorization: Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ=="
 ```
 
-### Operation of `min_items`, `max_items` and `interval`
+### Operation of `min_items`, `max_items` and `max_interval`
 
 During busy periods, when there are many queued events, batches of size `max_items` will be sent.
 
-During quiet periods, to avoid excessive queue latency, the `min_items` and `interval` values are used together.
+During quiet periods, to avoid excessive queue latency, the `min_items` and `max_interval` values are used together.
 
 The plugin will wait for events to arrive:
-* for _up to_ `interval` seconds, or
+* for _up to_ `max_interval` seconds, or
 * when `min_items` is reached (whichever happens soonest).
 
-A `min_items` value of 1 effectively means "send immediately when we have just one event". For efficient batching, set 1 > `min_items` >= `max_items`.
+A `min_items` value of 1 effectively means "send immediately when we have just one event". For efficient batching, set 1 < `min_items` <= `max_items`.
 
 ## Example
 
@@ -140,10 +140,10 @@ http_bulk("elastic", json_encode([]));
 
 ## Autoload
 
-This plugin creates files needed and used by the `smtpd` process, hence this plugin does not autoload when running the `hsh` script interpreter. There are two issues that may occur
+This plugin creates files needed and used by the `smtpd` process, hence this plugin does not autoload when running the `hsh` script interpreter. There are two issues that may occur:
 
 1) Bad file permission if logs are created by the user running `hsh` not the `smtpd` process.
-2) Mulitple subscribers on the logs file (`smtpd` and `hsh`). Do use this plugin in `hsh` if `smtpd` is running and vice versa.
+2) Multiple subscribers on the log files (`smtpd` and `hsh`). Do not use this plugin in `hsh` if `smtpd` is running and vice versa.
 
 To overcome the first issue, run `hsh` as `root` and use the `--privdrop` flag to become the same user as `smtpd` is using.
 
