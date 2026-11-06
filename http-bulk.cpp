@@ -126,10 +126,12 @@ static void curl_multi()
 				else
 					curl_easy_getinfo(e, CURLINFO_RESPONSE_CODE, &h->status);
 
-				h->mtx.lock();
-				h->cvv = true;
-				h->mtx.unlock();
-				h->cv.notify_one();
+				{
+					// notify while holding the lock: once it's released the subscriber may delete h
+					std::lock_guard<std::mutex> lk(h->mtx);
+					h->cvv = true;
+					h->cv.notify_one();
+				}
 
 				curl_multi_remove_handle(curlMultiHandle, e);
 				curl_easy_cleanup(e);
