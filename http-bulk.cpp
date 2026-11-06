@@ -13,6 +13,9 @@
 #include <map>
 #include <atomic>
 #include <stdexcept>
+#include <cerrno>
+#include <cstring>
+#include <sys/stat.h>
 
 // Halon > 6.1 is linked against libcurl with this feature
 #ifndef CURLOPT_AWS_SIGV4
@@ -50,7 +53,8 @@ struct bulkQueue
 
 	std::mutex writerMutex;
 	std::condition_variable writeCV;
-	bool writeNotify = false;
+	bool writeNotify = false; // wakes the subscriber (set by writes and by commands)
+	size_t writeSeq = 0;      // number of successful writes, to tell if anything was written since a read
 	jlog_ctx* writerContext;
 	jlog_ctx* readerContext;
 
@@ -204,6 +208,7 @@ static void http_bulk(HalonHSLContext* hhc, HalonHSLArguments* args, HalonHSLVal
 	else
 	{
 		r = true;
+		++x->second->writeSeq;
 		x->second->writeNotify = true;
 		x->second->writeCV.notify_one();
 	}
@@ -242,7 +247,14 @@ static void subscriber(std::shared_ptr<bulkQueue> queue)
 		}
 
 		jlog_id begin, end;
-		int count = jlog_ctx_read_interval(queue->readerContext, &begin, &end);
+		int count;
+		size_t seq;
+		{
+			// read under the writer lock, so writeSeq != seq later means "written after this read"
+			std::unique_lock<std::mutex> lk(queue->writerMutex);
+			seq = queue->writeSeq;
+			count = jlog_ctx_read_interval(queue->readerContext, &begin, &end);
+		}
 		if (queue->oneItem && count > 0)
 			goto send;
 		if (count < queue->minItems)
@@ -256,10 +268,10 @@ static void subscriber(std::shared_ptr<bulkQueue> queue)
 				if (queue->writeNotify)
 				{
 					queue->writeNotify = false;
-					// if we didn't see the next written item, we're probably at the end of a block file
-					// send what we have
+					// if something was written but we can't see it, the writer has moved on to the
+					// next block file, so send what we have
 					int count2 = jlog_ctx_read_interval(queue->readerContext, &begin, &end);
-					if (count2 > 0 && count2 == count)
+					if (count2 > 0 && count2 == count && queue->writeSeq != seq)
 						goto send;
 					continue;
 				}
@@ -270,10 +282,10 @@ static void subscriber(std::shared_ptr<bulkQueue> queue)
 				queue->writeNotify = false;
 				if (queue->quit)
 					break;
-				// if we didn't see the next written item, we're probably at the end of a block file
-				// send what we have
+				// if something was written but we can't see it, the writer has moved on to the
+				// next block file, so send what we have
 				int count2 = jlog_ctx_read_interval(queue->readerContext, &begin, &end);
-				if (count2 > 0 && count2 == count)
+				if (count2 > 0 && count2 == count && queue->writeSeq != seq)
 					goto send;
 				continue;
 			}
@@ -630,6 +642,8 @@ bool Halon_init(HalonInitContext* hic)
 		auto queues = HalonMTA_config_object_get(cfg, "queues");
 		if (queues)
 		{
+			std::map<std::string, std::string> queueIds;                    // queue id -> configured queue it belongs to
+			std::map<std::pair<dev_t, ino_t>, std::string> queuePaths;      // jlog directory -> queue id
 			size_t l = 0;
 			HalonConfig* queue;
 			while ((queue = HalonMTA_config_array_get(queues, l++)))
@@ -678,6 +692,12 @@ bool Halon_init(HalonInitContext* hic)
 						path = path_ + std::string(".") + std::to_string(i + 1);
 					}
 
+					// queue ids, including the subqueue ids created by concurrency, must be unique
+					auto usedId = queueIds.emplace(id, id_);
+					if (!usedId.second)
+						throw std::runtime_error(id + ": duplicate queue id" +
+							(usedId.first->second != id_ ? " (queue " + usedId.first->second + " and queue " + id_ + ")" : ""));
+
 					auto x = std::make_shared<bulkQueue>();
 					x->id = id;
 
@@ -697,6 +717,16 @@ bool Halon_init(HalonInitContext* hic)
 						jlog_ctx_add_subscriber(ctx, "subscriber1", JLOG_BEGIN);
 					}
 					jlog_ctx_close(ctx);
+
+					// two queues must not share a jlog; compare the directory itself, so that
+					// different spellings of the same path (//, relative, symlinks) are caught too
+					struct stat st;
+					if (stat(path.c_str(), &st) != 0)
+						throw std::runtime_error(path + ": " + strerror(errno));
+					auto usedPath = queuePaths.emplace(std::make_pair(st.st_dev, st.st_ino), id);
+					if (!usedPath.second)
+						throw std::runtime_error(id + ": path " + path + " is already used by queue " + usedPath.first->second);
+
 					ctx = jlog_new(path.c_str());
 					if (jlog_ctx_open_writer(ctx) != 0)
 						throw std::runtime_error(path + std::string(": ") + jlog_ctx_err_string(ctx));
