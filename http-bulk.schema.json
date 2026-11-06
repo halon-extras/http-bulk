@@ -32,22 +32,25 @@
                     "format": {
                         "type": "string",
                         "enum": ["ndjson", "jsonarray", "custom"],
-                        "default": "jsonarray",
+                        "default": "ndjson",
                         "description": "JSON bulk format"
                     },
                     "min_items": {
-                        "type": "number",
+                        "type": "integer",
                         "description": "Minimum items to send in bulk request",
+                        "minimum": 1,
                         "default": 1
                     },
                     "max_items": {
-                        "type": "number",
+                        "type": "integer",
                         "description": "Maximum items to send in bulk request",
+                        "minimum": 1,
                         "default": 1
                     },
                     "max_interval": {
-                        "type": "number",
+                        "type": "integer",
                         "description": "Maximum time to wait for min_items in seconds",
+                        "minimum": 0,
                         "default": 0
                     },
                     "tls_verify": {
@@ -61,7 +64,7 @@
                     },
                     "postamble": {
                         "type": "string",
-                        "description": "Postamble to add before the data (for each request)"
+                        "description": "Postamble to add after the data (for each request)"
                     },
                     "username": {
                         "type": "string",
@@ -76,13 +79,15 @@
                         "description": "AWS SIGv4 option (see CURLOPT_AWS_SIGV4)"
                     },
                     "timeout": {
-                        "type": "number",
+                        "type": "integer",
                         "description": "Maximum time to wait for a request in seconds",
+                        "minimum": 0,
                         "default": 0
                     },
                     "connect_timeout": {
-                        "type": "number",
+                        "type": "integer",
                         "description": "Maximum time to wait for a connect attempt in seconds",
+                        "minimum": 0,
                         "default": 300
                     },
                     "headers": {
@@ -94,7 +99,7 @@
                         }
                     },
                     "concurrency": {
-                        "type": "number",
+                        "type": "integer",
                         "description": "The number of concurrent requests / queues",
                         "minimum": 1,
                         "default": 1
