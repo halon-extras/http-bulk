@@ -45,7 +45,7 @@ struct bulkQueue
 	std::condition_variable runCV;
 	runstate_t runstate = RS_STARTED;
 
-	bool quit = false;
+	std::atomic<bool> quit{false};
 	std::thread subscriberThread;
 
 	std::mutex writerMutex;
@@ -54,7 +54,7 @@ struct bulkQueue
 	jlog_ctx* writerContext;
 	jlog_ctx* readerContext;
 
-	bool oneItem = false;
+	std::atomic<bool> oneItem{false};
 	size_t minItems = 1;
 	size_t maxItems = 1;
 	size_t maxInterval = 0;
@@ -77,13 +77,13 @@ struct bulkQueue
 struct bulkQueueConcurrency
 {
 	size_t concurrency = 0;
-	size_t current = 0;
+	std::atomic<size_t> current{0};
 };
 
 static std::map<std::string, std::shared_ptr<bulkQueue>> bulkQueues;
 static std::map<std::string, bulkQueueConcurrency> bulkQueuesConcurrency;
 
-static bool curlQuit = false;
+static std::atomic<bool> curlQuit{false};
 static std::thread curlThread;
 static CURLM *curlMultiHandle = NULL;
 
@@ -183,9 +183,12 @@ static void http_bulk(HalonHSLContext* hhc, HalonHSLArguments* args, HalonHSLVal
 	if (bqc == bulkQueuesConcurrency.end())
 		return;
 	std::string idbq = id;
-	if (bqc->second.concurrency > 1 && (bqc->second.current % bqc->second.concurrency) != 0)
-		idbq += "." + std::to_string((bqc->second.current % bqc->second.concurrency) + 1);
-	++bqc->second.current;
+	if (bqc->second.concurrency > 1)
+	{
+		size_t n = bqc->second.current++ % bqc->second.concurrency;
+		if (n != 0)
+			idbq += "." + std::to_string(n + 1);
+	}
 	auto x = bulkQueues.find(idbq);
 	if (x == bulkQueues.end())
 		return;
@@ -656,8 +659,12 @@ bool Halon_init(HalonInitContext* hic)
 				const char* concurrency_ = HalonMTA_config_string_get(HalonMTA_config_object_get(queue, "concurrency"), nullptr);
 				if (concurrency_)
 					concurrency = strtoul(concurrency_, nullptr, 10);
+				if (concurrency < 1)
+					throw std::runtime_error(std::string(id_) + ": concurrency must be at least 1");
 
-				bulkQueuesConcurrency[id_] = { concurrency , 0 };
+				auto& bqc = bulkQueuesConcurrency[id_];
+				bqc.concurrency = concurrency;
+				bqc.current = 0;
 
 				for (size_t i = 0; i < concurrency; ++i)
 				{

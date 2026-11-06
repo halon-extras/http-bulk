@@ -96,6 +96,7 @@
                     "concurrency": {
                         "type": "number",
                         "description": "The number of concurrent requests / queues",
+                        "minimum": 1,
                         "default": 1
                     }
                 }
