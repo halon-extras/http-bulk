@@ -245,6 +245,9 @@ static void subscriber(std::shared_ptr<bulkQueue> queue)
 			std::unique_lock<std::mutex> lk(queue->runMutex);
 			queue->runCV.wait(lk, [queue]{ queue->runstate = queue->runstate != RS_STARTED ? RS_STOPPED : RS_STARTED; return queue->runstate == RS_STARTED || queue->quit; });
 		}
+		// woken up for shutdown: don't resume a stopped queue
+		if (queue->quit)
+			break;
 
 		jlog_id begin, end;
 		int count;
@@ -292,6 +295,9 @@ static void subscriber(std::shared_ptr<bulkQueue> queue)
 		}
 
 send:
+		// don't start a new request once shutdown has begun; unsent items stay in the jlog
+		if (queue->quit)
+			break;
 		lastSend = std::chrono::steady_clock::now();
 
 		std::string payload = queue->preamble;
