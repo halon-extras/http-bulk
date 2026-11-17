@@ -510,7 +510,7 @@ bool Halon_command_execute(HalonCommandExecuteContext* hcec, size_t argc, const 
 		}
 
 		*out = strdup(h->second->error.c_str());
-		*outlen = h->second->error.size();
+		*outlen = strlen(*out);
 		h->second->runMutex.unlock();
 
 		return true;
